@@ -1,0 +1,41 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter/Dart/Pub related
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+!releases/
+!releases/*.apk
+
+# Android local keystore & gradle
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+android/.gradle/
+android/local.properties
+android/captures/
+
+# Windows build outputs
+windows/flutter/ephemeral/
+macos/Flutter/ephemeral/
+ios/Flutter/ephemeral/
+linux/flutter/ephemeral/
