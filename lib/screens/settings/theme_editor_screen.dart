@@ -907,6 +907,24 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           ],
         ),
         const SizedBox(height: 8),
+        Row(
+          children: [
+            const Text('角标形态：', style: TextStyle(fontSize: 12.5)),
+            const SizedBox(width: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'pill', label: Text('胶囊角标')),
+                ButtonSegment(value: 'ribbon', label: Text('斜角丝带')),
+              ],
+              selected: {style.badgeStyle},
+              showSelectedIcon: false,
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              onSelectionChanged: (s) =>
+                  onChanged(style.copyWith(badgeStyle: s.first)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 6,
@@ -1012,24 +1030,34 @@ class _CandidatePresetPreviewTile extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (hasBg)
-                  Image(
-                    image: ResizeImage.resizeIfNeeded(
-                      640,
-                      null,
-                      FileImage(File(bgPath)),
-                    ),
-                    fit: BoxFit.cover,
+                  RepaintBoundary(
+                    child: style.cardBlurSigma > 0.1
+                        ? ImageFiltered(
+                            imageFilter: ImageFilter.blur(
+                              sigmaX: style.cardBlurSigma,
+                              sigmaY: style.cardBlurSigma,
+                              tileMode: TileMode.clamp,
+                            ),
+                            child: Image(
+                              image: ResizeImage.resizeIfNeeded(
+                                640,
+                                null,
+                                FileImage(File(bgPath)),
+                              ),
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Image(
+                            image: ResizeImage.resizeIfNeeded(
+                              640,
+                              null,
+                              FileImage(File(bgPath)),
+                            ),
+                            fit: BoxFit.cover,
+                          ),
                   )
                 else
                   ColoredBox(color: surfaceColor),
-                if (hasBg && style.cardBlurSigma > 0.1)
-                  BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: style.cardBlurSigma,
-                      sigmaY: style.cardBlurSigma,
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
                 if (hasBg) ColoredBox(color: overlayColor),
                 Row(
                   children: [

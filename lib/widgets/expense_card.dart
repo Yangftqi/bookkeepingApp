@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
@@ -54,9 +55,7 @@ class ExpenseCard extends StatelessWidget {
     final hasGlobalBg =
         g.backgroundImagePath != null && g.backgroundImagePath!.isNotEmpty;
 
-    // Directional gradient scrim for illustrated cards:
-    // Stronger readability on the left (category + note) and right edge (amount),
-    // clearer visual window in the center-right so anime character art shines cleanly!
+    // Directional gradient scrim for illustrated cards
     final scrimBase = g.isDarkText ? Colors.white : Colors.black;
     final op = catStyle.cardOverlayOpacity.clamp(0.0, 0.92);
     final leftOp = (op * 1.18).clamp(0.18, 0.92);
@@ -76,8 +75,34 @@ class ExpenseCard extends StatelessWidget {
     final pillBackingColor = (g.isDarkText ? Colors.white : Colors.black)
         .withOpacity(hasCatImage ? 0.68 : 0.0);
 
-    final minimalistFill = GlassSurface.resolvedSurfaceColor(themeConfig)
-        .withOpacity(minimalistMode && hasGlobalBg ? 0.58 : 0.72);
+    // Zero-blur high-translucency light glass fill (120fps silky smooth!)
+    final cardGlassFill = GlassSurface.resolvedSurfaceColor(themeConfig)
+        .withOpacity(minimalistMode && hasGlobalBg ? 0.46 : 0.56);
+
+    Widget? cardImageLayer;
+    if (hasCatImage) {
+      final rawImg = Image(
+        image: ResizeImage.resizeIfNeeded(
+          960,
+          null,
+          FileImage(File(catBgPath)),
+        ),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+      cardImageLayer = RepaintBoundary(
+        child: catStyle.cardBlurSigma > 0.1
+            ? ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: catStyle.cardBlurSigma,
+                  sigmaY: catStyle.cardBlurSigma,
+                  tileMode: TileMode.clamp,
+                ),
+                child: rawImg,
+              )
+            : rawImg,
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -96,37 +121,12 @@ class ExpenseCard extends StatelessWidget {
             onLongPress: onLongPress,
             child: Stack(
               children: [
-                // Base layer: Category background image OR frosted translucent surface
+                // Base layer: Cached blurred category image OR zero-blur translucent glass surface
                 Positioned.fill(
-                  child: hasCatImage
-                      ? Image(
-                          image: ResizeImage.resizeIfNeeded(
-                            960,
-                            null,
-                            FileImage(File(catBgPath)),
-                          ),
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                        )
-                      : hasGlobalBg
-                          ? BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                              child: ColoredBox(color: minimalistFill),
-                            )
-                          : ColoredBox(color: g.surface),
+                  child: cardImageLayer ??
+                      ColoredBox(color: hasGlobalBg ? cardGlassFill : g.surface),
                 ),
-                // Blur on illustrated category card
-                if (hasCatImage && catStyle.cardBlurSigma > 0.1)
-                  Positioned.fill(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(
-                        sigmaX: catStyle.cardBlurSigma,
-                        sigmaY: catStyle.cardBlurSigma,
-                      ),
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                // Directional gradient readability scrim on illustrated category card
+                // Directional gradient readability scrim on illustrated card
                 if (hasCatImage)
                   Positioned.fill(
                     child: DecoratedBox(
@@ -150,7 +150,47 @@ class ExpenseCard extends StatelessWidget {
                   Positioned.fill(
                     child: ColoredBox(color: dayStyle.tintOverlayColorObj),
                   ),
-                // Foreground content with left category accent bar
+                // Optional Diagonal Corner Ribbon (top-right)
+                if (dayStyle.isRibbon)
+                  Positioned(
+                    top: 10,
+                    right: -24,
+                    child: IgnorePointer(
+                      child: Transform.rotate(
+                        angle: math.pi / 4,
+                        child: Container(
+                          width: 88,
+                          padding: const EdgeInsets.symmetric(vertical: 2.5),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: dayStyle.badgeColorObj.withOpacity(0.92),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            dayStyle.badgeText,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: const TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // Foreground 3-line layout:
+                // Row 1: Category pill (left) + Day-type pill badge (right, if not ribbon)
+                // Row 2: Date & Time (between category and note)
+                // Row 3: Note (left) + Amount (right)
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -163,9 +203,9 @@ class ExpenseCard extends StatelessWidget {
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
                             11,
-                            minimalistMode ? 8 : 11,
-                            11,
-                            minimalistMode ? 8 : 11,
+                            minimalistMode ? 7 : 10,
+                            dayStyle.isRibbon ? 14 : 11,
+                            minimalistMode ? 7 : 10,
                           ),
                           child: Row(
                             children: [
@@ -181,9 +221,9 @@ class ExpenseCard extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Line 1: Category pill + optional Pill badge
                                     Row(
                                       children: [
-                                        // Category name pill with frosted backing on illustrated cards
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
@@ -213,43 +253,45 @@ class ExpenseCard extends StatelessWidget {
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            DateUtilsExt.toDateTimeStr(
-                                              expense.dateTime,
+                                        const Spacer(),
+                                        if (!dayStyle.isRibbon)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 7,
+                                              vertical: 2,
                                             ),
-                                            style: TextStyle(
-                                              fontSize: 11.5,
-                                              color: g.secondaryTextColor,
-                                              shadows: textShadows,
+                                            decoration: BoxDecoration(
+                                              color: dayStyle.badgeColorObj,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        // Top-right Day-type badge pill
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: dayStyle.badgeColorObj,
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            dayStyle.badgeText,
-                                            style: const TextStyle(
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
+                                            child: Text(
+                                              dayStyle.badgeText,
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
                                             ),
                                           ),
-                                        ),
                                       ],
                                     ),
-                                    SizedBox(height: minimalistMode ? 5 : 8),
+                                    SizedBox(height: minimalistMode ? 3 : 5),
+                                    // Line 2: Date & Time (between category and note)
+                                    Text(
+                                      DateUtilsExt.toDateTimeStr(
+                                        expense.dateTime,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: g.secondaryTextColor,
+                                        shadows: textShadows,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    SizedBox(height: minimalistMode ? 3 : 5),
+                                    // Line 3: Note (left) + Amount (right)
                                     Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.end,
@@ -275,7 +317,6 @@ class ExpenseCard extends StatelessWidget {
                                           ),
                                         ),
                                         const SizedBox(width: 10),
-                                        // Amount with frosted pill backing on illustrated cards
                                         Container(
                                           padding: hasCatImage
                                               ? const EdgeInsets.symmetric(

@@ -75,6 +75,7 @@ class DayTypeItemStyle {
   final double borderWidth;
   final String borderStyle; // 'solid' or 'dashed'
   final String tintOverlayColor;
+  final String badgeStyle; // 'pill' or 'ribbon'
 
   const DayTypeItemStyle({
     required this.badgeText,
@@ -83,12 +84,14 @@ class DayTypeItemStyle {
     required this.borderWidth,
     required this.borderStyle,
     required this.tintOverlayColor,
+    this.badgeStyle = 'pill',
   });
 
   Color get badgeColorObj => ColorUtils.fromHex(badgeColor);
   Color get borderColorObj => ColorUtils.fromHex(borderColor);
   Color get tintOverlayColorObj => ColorUtils.fromHex(tintOverlayColor);
   bool get isDashed => borderStyle == 'dashed';
+  bool get isRibbon => badgeStyle == 'ribbon';
 
   DayTypeItemStyle copyWith({
     String? badgeText,
@@ -97,6 +100,7 @@ class DayTypeItemStyle {
     double? borderWidth,
     String? borderStyle,
     String? tintOverlayColor,
+    String? badgeStyle,
   }) {
     return DayTypeItemStyle(
       badgeText: badgeText ?? this.badgeText,
@@ -105,6 +109,7 @@ class DayTypeItemStyle {
       borderWidth: borderWidth ?? this.borderWidth,
       borderStyle: borderStyle ?? this.borderStyle,
       tintOverlayColor: tintOverlayColor ?? this.tintOverlayColor,
+      badgeStyle: badgeStyle ?? this.badgeStyle,
     );
   }
 
@@ -115,6 +120,7 @@ class DayTypeItemStyle {
         'borderWidth': borderWidth,
         'borderStyle': borderStyle,
         'tintOverlayColor': tintOverlayColor,
+        'badgeStyle': badgeStyle,
       };
 
   factory DayTypeItemStyle.fromJson(Map<String, dynamic> json) {
@@ -125,6 +131,7 @@ class DayTypeItemStyle {
       borderWidth: (json['borderWidth'] as num?)?.toDouble() ?? 1.0,
       borderStyle: json['borderStyle'] as String? ?? 'solid',
       tintOverlayColor: json['tintOverlayColor'] as String? ?? '#00000000',
+      badgeStyle: (json['badgeStyle'] as String?) == 'ribbon' ? 'ribbon' : 'pill',
     );
   }
 }
