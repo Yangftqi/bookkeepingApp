@@ -4,8 +4,7 @@ import '../models/theme_config.dart';
 
 /// Zero-lag high-translucency light glass panel.
 /// Uses pure alpha compositing + 1px glass edge highlight (no expensive per-frame
-/// BackdropFilter passes), ensuring 120fps scrolling and 100% consistent translucency
-/// on both static and scrollable screens.
+/// BackdropFilter passes), supporting custom `glassColor` and `glassOpacity`.
 class GlassSurface extends StatelessWidget {
   final ThemeConfig themeConfig;
   final Widget child;
@@ -31,16 +30,26 @@ class GlassSurface extends StatelessWidget {
     final g = themeConfig.globalStyle;
     final hasBg =
         g.backgroundImagePath != null && g.backgroundImagePath!.isNotEmpty;
-    final base = g.surface;
-    if (!hasBg) {
-      return base;
+    final hasCustomGlass =
+        (g.glassColor != null && g.glassColor!.isNotEmpty) ||
+            g.glassOpacity != null;
+
+    if (!hasBg && !hasCustomGlass) {
+      return g.surface;
     }
-    // High-translucency light glass when a global background image is active,
-    // while respecting even lower user-chosen surfaceColor alpha values.
+
+    final baseColor = g.effectiveGlassBase;
+    if (g.glassOpacity != null) {
+      final op = forBar
+          ? (g.glassOpacity! + 0.08).clamp(0.15, 0.94)
+          : g.glassOpacity!.clamp(0.15, 0.92);
+      return baseColor.withOpacity(op);
+    }
+
     final maxAlpha = forBar ? 0.64 : 0.54;
-    final currentAlpha = base.opacity;
+    final currentAlpha = baseColor.opacity;
     final effectiveAlpha = currentAlpha > maxAlpha ? maxAlpha : currentAlpha;
-    return base.withOpacity(effectiveAlpha.clamp(0.24, 0.85));
+    return baseColor.withOpacity(effectiveAlpha.clamp(0.18, 0.85));
   }
 
   @override
@@ -51,8 +60,7 @@ class GlassSurface extends StatelessWidget {
     final fillColor = resolvedSurfaceColor(themeConfig);
     final subtleBorder = border ??
         Border.all(
-          color: (g.isDarkText ? Colors.white : Colors.white)
-              .withOpacity(hasBg ? 0.42 : 0.14),
+          color: Colors.white.withOpacity(hasBg ? 0.42 : 0.14),
           width: 1.0,
         );
 

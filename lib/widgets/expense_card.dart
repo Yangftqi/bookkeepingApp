@@ -36,6 +36,173 @@ class ExpenseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (minimalistMode) {
+      return _buildMinimalistCard(context);
+    }
+    return _buildStandardCard(context);
+  }
+
+  /// Ultra-compact Minimalist Card:
+  /// - Independent of illustrated card's pill/ribbon toggle
+  /// - Left: Category pill + DateTime stacked tightly
+  /// - Middle: Note (1 line)
+  /// - Right-middle: Amount
+  /// - Far-right edge: Vertical Workday/Rest-day strip
+  Widget _buildMinimalistCard(BuildContext context) {
+    final g = themeConfig.globalStyle;
+    final catStyle = themeConfig.styleForCategory(
+      categoryId: category.id,
+      categoryName: category.name,
+      defaultColorHex: category.defaultColorHex,
+    );
+    final dayStyle = expense.isRestDay
+        ? themeConfig.dayTypeStyle.restDay
+        : themeConfig.dayTypeStyle.workday;
+
+    final glassFill = GlassSurface.resolvedSurfaceColor(themeConfig);
+    final verticalDayText = dayStyle.badgeText.split('').join('\n');
+    final dtStr = DateUtilsExt.toDateTimeStr(expense.dateTime);
+    final compactDt = dtStr.length >= 16 ? dtStr.substring(5) : dtStr;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: BorderedCardContainer(
+        borderColor: isSelected ? g.primary : dayStyle.borderColorObj,
+        borderWidth: isSelected ? 2.2 : dayStyle.borderWidth,
+        isDashed: !isSelected && dayStyle.isDashed,
+        borderRadius: 12,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Stack(
+              children: [
+                Positioned.fill(child: ColoredBox(color: glassFill)),
+                if (dayStyle.tintOverlayColorObj.alpha > 0)
+                  Positioned.fill(
+                    child: ColoredBox(color: dayStyle.tintOverlayColorObj),
+                  ),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Left 4px category accent bar
+                      Container(width: 4, color: catStyle.color),
+                      if (selectionMode)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Checkbox(
+                            value: isSelected,
+                            onChanged: (_) => onTap?.call(),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      // Left column: Category + DateTime
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: catStyle.color.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: catStyle.color.withOpacity(0.65),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                category.name,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: g.isDarkText
+                                      ? catStyle.color
+                                      : Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2.5),
+                            Text(
+                              compactDt,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: g.secondaryTextColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Middle: Note
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            expense.note.trim().isEmpty
+                                ? '无备注'
+                                : expense.note.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: expense.note.trim().isEmpty
+                                  ? g.secondaryTextColor.withOpacity(0.75)
+                                  : g.textColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Right-middle: Amount
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Center(
+                          child: Text(
+                            '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: g.textColor,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Far-right edge: Vertical Workday/Rest-day strip
+                      Container(
+                        width: 19,
+                        color: dayStyle.badgeColorObj.withOpacity(0.92),
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(
+                          verticalDayText,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 8.5,
+                            height: 1.12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStandardCard(BuildContext context) {
     final g = themeConfig.globalStyle;
     final catStyle = themeConfig.styleForCategory(
       categoryId: category.id,
@@ -47,13 +214,8 @@ class ExpenseCard extends StatelessWidget {
         : themeConfig.dayTypeStyle.workday;
 
     final catBgPath = catStyle.backgroundImagePath;
-    final hasCatImage = !minimalistMode &&
-        catBgPath != null &&
-        catBgPath.isNotEmpty &&
-        File(catBgPath).existsSync();
-
-    final hasGlobalBg =
-        g.backgroundImagePath != null && g.backgroundImagePath!.isNotEmpty;
+    final hasCatImage =
+        catBgPath != null && catBgPath.isNotEmpty && File(catBgPath).existsSync();
 
     // Directional gradient scrim for illustrated cards
     final scrimBase = g.isDarkText ? Colors.white : Colors.black;
@@ -75,9 +237,7 @@ class ExpenseCard extends StatelessWidget {
     final pillBackingColor = (g.isDarkText ? Colors.white : Colors.black)
         .withOpacity(hasCatImage ? 0.68 : 0.0);
 
-    // Zero-blur high-translucency light glass fill (120fps silky smooth!)
-    final cardGlassFill = GlassSurface.resolvedSurfaceColor(themeConfig)
-        .withOpacity(minimalistMode && hasGlobalBg ? 0.46 : 0.56);
+    final cardGlassFill = GlassSurface.resolvedSurfaceColor(themeConfig);
 
     Widget? cardImageLayer;
     if (hasCatImage) {
@@ -105,15 +265,12 @@ class ExpenseCard extends StatelessWidget {
     }
 
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: minimalistMode ? 3.5 : 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       child: BorderedCardContainer(
         borderColor: isSelected ? g.primary : dayStyle.borderColorObj,
         borderWidth: isSelected ? 2.4 : dayStyle.borderWidth,
         isDashed: !isSelected && dayStyle.isDashed,
-        borderRadius: minimalistMode ? 14 : 16,
+        borderRadius: 16,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -121,12 +278,9 @@ class ExpenseCard extends StatelessWidget {
             onLongPress: onLongPress,
             child: Stack(
               children: [
-                // Base layer: Cached blurred category image OR zero-blur translucent glass surface
                 Positioned.fill(
-                  child: cardImageLayer ??
-                      ColoredBox(color: hasGlobalBg ? cardGlassFill : g.surface),
+                  child: cardImageLayer ?? ColoredBox(color: cardGlassFill),
                 ),
-                // Directional gradient readability scrim on illustrated card
                 if (hasCatImage)
                   Positioned.fill(
                     child: DecoratedBox(
@@ -145,12 +299,10 @@ class ExpenseCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                // Workday / Rest-day tint overlay
                 if (dayStyle.tintOverlayColorObj.alpha > 0)
                   Positioned.fill(
                     child: ColoredBox(color: dayStyle.tintOverlayColorObj),
                   ),
-                // Optional Diagonal Corner Ribbon (top-right)
                 if (dayStyle.isRibbon)
                   Positioned(
                     top: 10,
@@ -187,25 +339,18 @@ class ExpenseCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                // Foreground 3-line layout:
-                // Row 1: Category pill (left) + Day-type pill badge (right, if not ribbon)
-                // Row 2: Date & Time (between category and note)
-                // Row 3: Note (left) + Amount (right)
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(
-                        width: minimalistMode ? 4.5 : 6,
-                        color: catStyle.color,
-                      ),
+                      Container(width: 6, color: catStyle.color),
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
                             11,
-                            minimalistMode ? 7 : 10,
+                            10,
                             dayStyle.isRibbon ? 14 : 11,
-                            minimalistMode ? 7 : 10,
+                            10,
                           ),
                           child: Row(
                             children: [
@@ -221,7 +366,6 @@ class ExpenseCard extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Line 1: Category pill + optional Pill badge
                                     Row(
                                       children: [
                                         Container(
@@ -276,8 +420,7 @@ class ExpenseCard extends StatelessWidget {
                                           ),
                                       ],
                                     ),
-                                    SizedBox(height: minimalistMode ? 3 : 5),
-                                    // Line 2: Date & Time (between category and note)
+                                    const SizedBox(height: 5),
                                     Text(
                                       DateUtilsExt.toDateTimeStr(
                                         expense.dateTime,
@@ -290,8 +433,7 @@ class ExpenseCard extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    SizedBox(height: minimalistMode ? 3 : 5),
-                                    // Line 3: Note (left) + Amount (right)
+                                    const SizedBox(height: 5),
                                     Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.end,
@@ -301,7 +443,7 @@ class ExpenseCard extends StatelessWidget {
                                             expense.note.trim().isEmpty
                                                 ? '无备注'
                                                 : expense.note.trim(),
-                                            maxLines: minimalistMode ? 1 : 2,
+                                            maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 13.5,
@@ -334,8 +476,7 @@ class ExpenseCard extends StatelessWidget {
                                           child: Text(
                                             '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
                                             style: TextStyle(
-                                              fontSize:
-                                                  minimalistMode ? 16.5 : 18,
+                                              fontSize: 18,
                                               fontWeight: FontWeight.w800,
                                               color: g.textColor,
                                               letterSpacing: -0.3,

@@ -35,11 +35,15 @@ class _BillsTabState extends ConsumerState<BillsTab> {
   bool _batchMode = false;
   final Set<String> _selectedExpenseIds = {};
 
-  /// Minimalist translucent list mode (hides per-card background images to showcase global background).
+  /// Minimalist translucent list mode (ultra-compact cards showcasing global background).
   bool _minimalistMode = false;
 
-  /// Pure background appreciation overlay (hides foreground UI until tapped).
+  /// Pure background appreciation overlay (triggered by pulling down past top of bills list).
   bool _artPreviewMode = false;
+  double _pullDownDistance = 0.0;
+  bool _armedArtPreview = false;
+
+  static const double _pullTriggerThreshold = 76.0;
 
   @override
   void dispose() {
@@ -233,30 +237,50 @@ class _BillsTabState extends ConsumerState<BillsTab> {
         _selectedCategoryIds.isNotEmpty ||
         _dayTypeFilter != _DayTypeFilter.all;
 
-    // Pure background appreciation mode
+    // Pure background appreciation mode: exit via swipe-up OR Exit button
     if (_artPreviewMode && hasGlobalBg) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _artPreviewMode = false),
+        onVerticalDragEnd: (details) {
+          if ((details.primaryVelocity ?? 0) < -180) {
+            setState(() => _artPreviewMode = false);
+          }
+        },
         child: Stack(
           children: [
             const SizedBox.expand(),
             Positioned(
-              right: 16,
-              bottom: 20,
-              child: FilledButton.tonalIcon(
-                onPressed: () => setState(() => _artPreviewMode = false),
-                icon: const Icon(Icons.visibility_rounded, size: 18),
-                label: const Text('退出赏图'),
+              left: 0,
+              right: 0,
+              bottom: 22,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '向上滑动或点击按钮返回',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.88),
+                        shadows: const [
+                          Shadow(color: Colors.black54, blurRadius: 6),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: () => setState(() => _artPreviewMode = false),
+                      icon: const Icon(Icons.visibility_rounded, size: 18),
+                      label: const Text('退出赏图'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       );
     }
-
-    // Add a breathable top hero space inside the scrollable list when a global background is present
-    final showHeroSpacer = hasGlobalBg && !_showFilters && !_batchMode;
 
     return Stack(
       children: [
@@ -304,7 +328,7 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                   ),
                   const SizedBox(width: 6),
                   IconButton.filledTonal(
-                    tooltip: _minimalistMode ? '切回卡片主题图模式' : '切换极简高透列表模式',
+                    tooltip: _minimalistMode ? '切回卡片主题图模式' : '切换极简模式',
                     onPressed: () =>
                         setState(() => _minimalistMode = !_minimalistMode),
                     icon: Icon(
@@ -314,14 +338,6 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                       size: 19,
                     ),
                   ),
-                  if (hasGlobalBg) ...[
-                    const SizedBox(width: 4),
-                    IconButton.filledTonal(
-                      tooltip: '纯净赏图模式',
-                      onPressed: () => setState(() => _artPreviewMode = true),
-                      icon: const Icon(Icons.photo_outlined, size: 19),
-                    ),
-                  ],
                   const SizedBox(width: 4),
                   IconButton.filledTonal(
                     tooltip: '筛选',
@@ -627,81 +643,155 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                 ),
               ),
 
-            // Expense list (with breathable background spacer when global background is set)
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: GlassSurface(
-                        themeConfig: themeCfg,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        borderRadius: 18,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.receipt_long_outlined,
-                              size: 48,
-                              color: g.secondaryTextColor.withOpacity(0.7),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              hasActiveFilter
-                                  ? '没有符合筛选条件的支出记录'
-                                  : '暂无支出记录，点击右下角记一笔吧',
-                              style: TextStyle(color: g.secondaryTextColor),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 88),
-                      itemCount: filtered.length + (showHeroSpacer ? 1 : 0),
-                      itemBuilder: (ctx, rawIdx) {
-                        if (showHeroSpacer && rawIdx == 0) {
-                          return const SizedBox(height: 150);
-                        }
-                        final idx = showHeroSpacer ? rawIdx - 1 : rawIdx;
-                        final exp = filtered[idx];
-                        final cat = state.categoryById(exp.categoryId);
-                        final selected = _selectedExpenseIds.contains(exp.id);
-                        return ExpenseCard(
-                          expense: exp,
-                          category: cat,
-                          themeConfig: themeCfg,
-                          currencyPrefix: currency,
-                          selectionMode: _batchMode,
-                          isSelected: selected,
-                          minimalistMode: _minimalistMode,
-                          onTap: () {
-                            if (_batchMode) {
-                              setState(() {
-                                if (selected) {
-                                  _selectedExpenseIds.remove(exp.id);
-                                } else {
-                                  _selectedExpenseIds.add(exp.id);
-                                }
-                              });
-                            } else {
-                              showExpenseEditorSheet(
-                                context,
-                                ref,
-                                existing: exp,
-                              );
-                            }
-                          },
-                          onLongPress: () {
-                            setState(() {
-                              _batchMode = true;
-                              _selectedExpenseIds.add(exp.id);
-                            });
-                          },
-                        );
-                      },
+            // Pull-down hint indicator when pulling past top to enter Art Preview
+            if (hasGlobalBg && _pullDownDistance > 12)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _armedArtPreview
+                          ? Icons.photo_rounded
+                          : Icons.arrow_downward_rounded,
+                      size: 15,
+                      color: g.primary,
                     ),
+                    const SizedBox(width: 5),
+                    Text(
+                      _armedArtPreview ? '松手进入纯净赏图' : '继续下拉进入纯净赏图',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: g.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Expense list (pull down past top to enter Art Preview when global background is set)
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (!hasGlobalBg) return false;
+                  if (notification is ScrollUpdateNotification) {
+                    final pixels = notification.metrics.pixels;
+                    if (pixels < 0) {
+                      final pull = -pixels;
+                      final armed = pull >= _pullTriggerThreshold;
+                      if ((pull - _pullDownDistance).abs() > 3 ||
+                          armed != _armedArtPreview) {
+                        setState(() {
+                          _pullDownDistance = pull;
+                          _armedArtPreview = armed;
+                        });
+                      }
+                    } else if (_pullDownDistance > 0) {
+                      setState(() {
+                        _pullDownDistance = 0;
+                        _armedArtPreview = false;
+                      });
+                    }
+                  } else if (notification is ScrollEndNotification) {
+                    if (_armedArtPreview) {
+                      setState(() {
+                        _pullDownDistance = 0;
+                        _armedArtPreview = false;
+                        _artPreviewMode = true;
+                      });
+                    } else if (_pullDownDistance > 0) {
+                      setState(() {
+                        _pullDownDistance = 0;
+                        _armedArtPreview = false;
+                      });
+                    }
+                  }
+                  return false;
+                },
+                child: filtered.isEmpty
+                    ? ListView(
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        padding: const EdgeInsets.only(top: 64, bottom: 88),
+                        children: [
+                          Center(
+                            child: GlassSurface(
+                              themeConfig: themeCfg,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 20,
+                              ),
+                              borderRadius: 18,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.receipt_long_outlined,
+                                    size: 48,
+                                    color:
+                                        g.secondaryTextColor.withOpacity(0.7),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    hasActiveFilter
+                                        ? '没有符合筛选条件的支出记录'
+                                        : '暂无支出记录，点击右下角记一笔吧',
+                                    style:
+                                        TextStyle(color: g.secondaryTextColor),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        padding: const EdgeInsets.only(bottom: 88),
+                        itemCount: filtered.length,
+                        itemBuilder: (ctx, idx) {
+                          final exp = filtered[idx];
+                          final cat = state.categoryById(exp.categoryId);
+                          final selected = _selectedExpenseIds.contains(exp.id);
+                          return ExpenseCard(
+                            expense: exp,
+                            category: cat,
+                            themeConfig: themeCfg,
+                            currencyPrefix: currency,
+                            selectionMode: _batchMode,
+                            isSelected: selected,
+                            minimalistMode: _minimalistMode,
+                            onTap: () {
+                              if (_batchMode) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedExpenseIds.remove(exp.id);
+                                  } else {
+                                    _selectedExpenseIds.add(exp.id);
+                                  }
+                                });
+                              } else {
+                                showExpenseEditorSheet(
+                                  context,
+                                  ref,
+                                  existing: exp,
+                                );
+                              }
+                            },
+                            onLongPress: () {
+                              setState(() {
+                                _batchMode = true;
+                                _selectedExpenseIds.add(exp.id);
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
             ),
           ],
         ),

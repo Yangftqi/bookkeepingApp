@@ -9,6 +9,8 @@ class GlobalStyleConfig {
   final String? backgroundImagePath;
   final double bgOverlayOpacity;
   final double bgBlurSigma;
+  final String? glassColor;
+  final double? glassOpacity;
 
   const GlobalStyleConfig({
     required this.primaryColor,
@@ -17,10 +19,16 @@ class GlobalStyleConfig {
     this.backgroundImagePath,
     required this.bgOverlayOpacity,
     required this.bgBlurSigma,
+    this.glassColor,
+    this.glassOpacity,
   });
 
   Color get primary => ColorUtils.fromHex(primaryColor);
   Color get surface => ColorUtils.fromHex(surfaceColor);
+  Color get effectiveGlassBase =>
+      glassColor != null && glassColor!.isNotEmpty
+          ? ColorUtils.fromHex(glassColor)
+          : surface;
   Color get textColor =>
       isDarkText ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
   Color get secondaryTextColor =>
@@ -34,6 +42,9 @@ class GlobalStyleConfig {
     bool clearBackgroundImage = false,
     double? bgOverlayOpacity,
     double? bgBlurSigma,
+    String? glassColor,
+    bool clearGlassColor = false,
+    double? glassOpacity,
   }) {
     return GlobalStyleConfig(
       primaryColor: primaryColor ?? this.primaryColor,
@@ -44,6 +55,8 @@ class GlobalStyleConfig {
           : (backgroundImagePath ?? this.backgroundImagePath),
       bgOverlayOpacity: bgOverlayOpacity ?? this.bgOverlayOpacity,
       bgBlurSigma: bgBlurSigma ?? this.bgBlurSigma,
+      glassColor: clearGlassColor ? null : (glassColor ?? this.glassColor),
+      glassOpacity: glassOpacity ?? this.glassOpacity,
     );
   }
 
@@ -54,6 +67,9 @@ class GlobalStyleConfig {
         'backgroundImagePath': backgroundImagePath,
         'bgOverlayOpacity': bgOverlayOpacity,
         'bgBlurSigma': bgBlurSigma,
+        if (glassColor != null && glassColor!.isNotEmpty)
+          'glassColor': glassColor,
+        if (glassOpacity != null) 'glassOpacity': glassOpacity,
       };
 
   factory GlobalStyleConfig.fromJson(Map<String, dynamic> json) {
@@ -64,6 +80,8 @@ class GlobalStyleConfig {
       backgroundImagePath: json['backgroundImagePath'] as String?,
       bgOverlayOpacity: (json['bgOverlayOpacity'] as num?)?.toDouble() ?? 0.2,
       bgBlurSigma: (json['bgBlurSigma'] as num?)?.toDouble() ?? 0.0,
+      glassColor: json['glassColor'] as String?,
+      glassOpacity: (json['glassOpacity'] as num?)?.toDouble(),
     );
   }
 }

@@ -37,6 +37,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
   late ThemeConfig _config;
   bool _keepLossless = false; // Default OFF: Smart HD compression
   bool _previewRestDay = false;
+  bool _previewMinimalist = false;
   String? _previewCatId;
   bool _saving = false;
 
@@ -387,38 +388,41 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           const SizedBox(width: 12),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
+      body: Column(
         children: [
-          // Lossless Toggle at top of Theme Workshop Editor
-          Card(
-            child: SwitchListTile(
-              title: const Text(
-                '保留无损原图',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                _keepLossless ? '已开启：保存裁剪后原图' : '默认关闭：自动高清压缩以提升滚动流畅度',
-                style: const TextStyle(fontSize: 12),
-              ),
-              value: _keepLossless,
-              onChanged: (v) => setState(() => _keepLossless = v),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Live Preview Box
-          Card(
+          // Sticky Pinned Live Preview Box (always visible while editing below!)
+          Material(
+            elevation: 2,
+            color: Theme.of(context).colorScheme.surface,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
                       const Text(
-                        '实时账单卡片预览',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        '实时预览',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(value: false, label: Text('插画')),
+                          ButtonSegment(value: true, label: Text('极简')),
+                        ],
+                        selected: {_previewMinimalist},
+                        showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onSelectionChanged: (s) =>
+                            setState(() => _previewMinimalist = s.first),
                       ),
                       const Spacer(),
                       SegmentedButton<bool>(
@@ -430,6 +434,7 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                         showSelectedIcon: false,
                         style: const ButtonStyle(
                           visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         onSelectionChanged: (s) =>
                             setState(() => _previewRestDay = s.first),
@@ -437,20 +442,29 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    children: categories.map((c) {
-                      return ChoiceChip(
-                        label: Text(c.name, style: const TextStyle(fontSize: 11.5)),
-                        selected: c.id == previewCat.id,
-                        visualDensity: VisualDensity.compact,
-                        onSelected: (_) => setState(() => _previewCatId = c.id),
-                      );
-                    }).toList(),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: categories.map((c) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(
+                              c.name,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            selected: c.id == previewCat.id,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (_) =>
+                                setState(() => _previewCatId = c.id),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     decoration: BoxDecoration(
                       color: _config.globalStyle.isDarkText
                           ? const Color(0xFFE2E8F0)
@@ -462,13 +476,36 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                       category: previewCat,
                       themeConfig: _config,
                       currencyPrefix: state.settings.displayCurrency,
+                      minimalistMode: _previewMinimalist,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          // Scrollable editor body below pinned preview
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(14),
+              children: [
+                // Lossless Toggle
+                Card(
+                  child: SwitchListTile(
+                    title: const Text(
+                      '保留无损原图',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      _keepLossless
+                          ? '已开启：保存裁剪后原图'
+                          : '默认关闭：自动高清压缩以提升滚动流畅度',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    value: _keepLossless,
+                    onChanged: (v) => setState(() => _keepLossless = v),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
           // Theme Name & Global Style
           Card(
@@ -613,6 +650,70 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                       _config = _config.copyWith(
                         globalStyle:
                             _config.globalStyle.copyWith(bgOverlayOpacity: v),
+                      );
+                    }),
+                  ),
+                  const Divider(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final hex = await _showColorPickerDialog(
+                              '选择高透玻璃底色',
+                              _config.globalStyle.glassColor ??
+                                  _config.globalStyle.surfaceColor,
+                            );
+                            if (hex != null) {
+                              setState(() {
+                                _config = _config.copyWith(
+                                  globalStyle: _config.globalStyle
+                                      .copyWith(glassColor: hex),
+                                );
+                              });
+                            }
+                          },
+                          icon: Icon(
+                            Icons.circle,
+                            color: _config.globalStyle.effectiveGlassBase,
+                            size: 16,
+                          ),
+                          label: Text(
+                            _config.globalStyle.glassColor != null
+                                ? '高透玻璃色'
+                                : '高透玻璃色(默认)',
+                          ),
+                        ),
+                      ),
+                      if (_config.globalStyle.glassColor != null) ...[
+                        const SizedBox(width: 6),
+                        IconButton(
+                          tooltip: '重置为默认底色',
+                          onPressed: () => setState(() {
+                            _config = _config.copyWith(
+                              globalStyle: _config.globalStyle
+                                  .copyWith(clearGlassColor: true),
+                            );
+                          }),
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '高透玻璃不透明度：${((_config.globalStyle.glassOpacity ?? 0.54) * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  Slider(
+                    value: (_config.globalStyle.glassOpacity ?? 0.54)
+                        .clamp(0.15, 0.90),
+                    min: 0.15,
+                    max: 0.90,
+                    onChanged: (v) => setState(() {
+                      _config = _config.copyWith(
+                        globalStyle:
+                            _config.globalStyle.copyWith(glassOpacity: v),
                       );
                     }),
                   ),
@@ -864,6 +965,9 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
             ),
           ),
           const SizedBox(height: 24),
+        ],
+      ),
+    ),
         ],
       ),
     );
