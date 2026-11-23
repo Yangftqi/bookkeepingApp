@@ -26,9 +26,14 @@ build/
 !releases/
 !releases/*.apk
 
-# Local specifications not pushed to remote
-theme_package_specification.md
+# Local handoff doc & private theme packages not pushed to remote
 AGENT.md
+themepack/gemini_neko_academy_dark.themepkg.zip
+themepack/gemini_neko_academy_light.themepkg.zip
+themepack/gemini_neko_dark.themepkg.zip
+themepack/gemini_neko_fantasy_dark.themepkg.zip
+themepack/gemini_neko_fantasy_light.themepkg.zip
+themepack/gemini_neko_light.themepkg.zip
 
 # Android local keystore & gradle
 android/key.properties
