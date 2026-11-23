@@ -1,3 +1,7 @@
+# 这个项目使用AI生成
+使用模型包括Gemini 4 Neon 与 Gemini 4 Argon
+
+
 # 基米记账 (BookkeepingApp)
 
 一款纯本地离线优先、多用户 4 级权限、深度视觉主题定制、支持宏观经济学模型对比（含双引擎 API 建模）与 OpenAI 兼容大模型流式对话分析的跨平台支出记账应用（Android / iOS / Windows）。
