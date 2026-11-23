@@ -11,6 +11,7 @@ import '../../models/economic_models.dart';
 import '../../providers/app_providers.dart';
 import '../../services/llm_service.dart';
 import '../../utils/date_utils_ext.dart';
+import '../../widgets/glass_surface.dart';
 import '../../widgets/pin_dialog.dart';
 import '../settings/llm_profiles_screen.dart';
 import 'role_presets_dialog.dart';
@@ -570,7 +571,9 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
-    final g = state.activeTheme.config.globalStyle;
+    final themeCfg = state.activeTheme.config;
+    final g = themeCfg.globalStyle;
+    final glassFill = GlassSurface.resolvedSurfaceColor(themeCfg);
     final presets = state.settings.aiRolePresets;
     if (_selectedRoleId == null && presets.isNotEmpty) {
       _selectedRoleId = presets.first.id;
@@ -612,7 +615,7 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
           margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.94),
+            color: glassFill,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -714,7 +717,7 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: g.surface.withOpacity(0.9),
+                        color: glassFill,
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Column(
@@ -803,7 +806,7 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
           decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.96),
+            color: glassFill,
             border: Border(
               top: BorderSide(color: g.secondaryTextColor.withOpacity(0.15)),
             ),

@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/category.dart';
 import '../../models/expense.dart';
+import '../../models/theme_config.dart';
 import '../../providers/app_providers.dart';
 import '../../utils/date_utils_ext.dart';
+import '../../widgets/glass_surface.dart';
 
 enum StatsPeriod { day, week, month }
 
@@ -35,10 +37,12 @@ class _StatsTabState extends ConsumerState<StatsTab> {
   DateTime _anchor = DateTime.now();
   int _touchedPieIndex = -1;
   bool _monthAsLineChart = true;
+  int? _selectedTrendIndex;
 
   void _shiftPeriod(int delta) {
     setState(() {
       _touchedPieIndex = -1;
+      _selectedTrendIndex = null;
       switch (_period) {
         case StatsPeriod.day:
           _anchor = _anchor.add(Duration(days: delta));
@@ -71,6 +75,49 @@ class _StatsTabState extends ConsumerState<StatsTab> {
         final s = DateUtilsExt.startOfMonth(_anchor);
         final e = DateUtilsExt.endOfMonth(_anchor);
         return (s, e, DateUtilsExt.toMonthTitle(_anchor));
+    }
+  }
+
+  (List<double>, List<String>, List<String>) _computeTrendSeries(
+    List<Expense> periodExpenses,
+    DateTime start,
+    DateTime end,
+  ) {
+    if (_period == StatsPeriod.day) {
+      final values = List<double>.filled(24, 0.0);
+      final labels = List<String>.generate(24, (h) => '$h');
+      final fullLabels = List<String>.generate(
+        24,
+        (h) => '${h.toString().padLeft(2, '0')}:00 - ${h.toString().padLeft(2, '0')}:59',
+      );
+      for (final e in periodExpenses) {
+        values[e.dateTime.hour] += e.amount;
+      }
+      return (values, labels, fullLabels);
+    } else if (_period == StatsPeriod.week) {
+      final values = List<double>.filled(7, 0.0);
+      const labels = ['一', '二', '三', '四', '五', '六', '日'];
+      final fullLabels = List<String>.generate(7, (i) {
+        final d = start.add(Duration(days: i));
+        return '周${labels[i]} (${d.month}/${d.day})';
+      });
+      for (final e in periodExpenses) {
+        values[e.dateTime.weekday - 1] += e.amount;
+      }
+      return (values, labels, fullLabels);
+    } else {
+      final daysInMonth = end.day;
+      final values = List<double>.filled(daysInMonth, 0.0);
+      final labels = List<String>.generate(daysInMonth, (i) => '${i + 1}');
+      final fullLabels = List<String>.generate(
+        daysInMonth,
+        (i) => '${_anchor.month}月${i + 1}日',
+      );
+      for (final e in periodExpenses) {
+        final idx = (e.dateTime.day - 1).clamp(0, daysInMonth - 1);
+        values[idx] += e.amount;
+      }
+      return (values, labels, fullLabels);
     }
   }
 
@@ -117,7 +164,15 @@ class _StatsTabState extends ConsumerState<StatsTab> {
       _touchedPieIndex = -1;
     }
 
-    // 2. Workday vs Rest-day strictly using natural calendar day denominator
+    // 2. Trend series
+    final (trendValues, trendLabels, trendFullLabels) =
+        _computeTrendSeries(periodExpenses, start, end);
+    if (_selectedTrendIndex != null &&
+        _selectedTrendIndex! >= trendValues.length) {
+      _selectedTrendIndex = null;
+    }
+
+    // 3. Workday vs Rest-day strictly using natural calendar day denominator
     final todayEnd = DateUtilsExt.endOfDay(DateTime.now());
     final effectiveEnd = end.isAfter(todayEnd) ? todayEnd : end;
     final calendarDays = DateUtilsExt.enumerateDays(start, effectiveEnd);
@@ -150,12 +205,10 @@ class _StatsTabState extends ConsumerState<StatsTab> {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 28),
       children: [
         // Period switcher + Navigator
-        Container(
+        GlassSurface(
+          themeConfig: themeCfg,
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.92),
-            borderRadius: BorderRadius.circular(16),
-          ),
+          borderRadius: 16,
           child: Column(
             children: [
               SegmentedButton<StatsPeriod>(
@@ -168,6 +221,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                 onSelectionChanged: (s) => setState(() {
                   _period = s.first;
                   _touchedPieIndex = -1;
+                  _selectedTrendIndex = null;
                 }),
               ),
               const SizedBox(height: 8),
@@ -198,6 +252,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                         onPressed: () => setState(() {
                           _anchor = DateTime.now();
                           _touchedPieIndex = -1;
+                          _selectedTrendIndex = null;
                         }),
                         child: const Text('回到今日', style: TextStyle(fontSize: 12)),
                       ),
@@ -215,9 +270,9 @@ class _StatsTabState extends ConsumerState<StatsTab> {
         ),
         const SizedBox(height: 12),
 
-        // CARD 1: Total Expense + Ring PieChart (Pure Focus) + Category Ranking
+        // CARD 1: Total Expense + Interactive PieChart + Category Ranking
         _StatsCard(
-          surfaceColor: g.surface.withOpacity(0.92),
+          themeConfig: themeCfg,
           title: '总支出与分类占比',
           textColor: g.textColor,
           trailing: Text(
@@ -250,20 +305,21 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                               centerSpaceRadius: 58,
                               sectionsSpace: 2,
                               pieTouchData: PieTouchData(
+                                enabled: true,
                                 touchCallback: (event, response) {
-                                  if (!event.isInterestedForInteractions ||
-                                      response == null ||
-                                      response.touchedSection == null) {
+                                  if (event is! FlTapUpEvent) return;
+                                  final idx = response
+                                      ?.touchedSection?.touchedSectionIndex;
+                                  if (idx == null ||
+                                      idx < 0 ||
+                                      idx >= catStats.length) {
+                                    setState(() => _touchedPieIndex = -1);
                                     return;
                                   }
-                                  final idx = response
-                                      .touchedSection!.touchedSectionIndex;
-                                  if (event is FlTapUpEvent) {
-                                    setState(() {
-                                      _touchedPieIndex =
-                                          (_touchedPieIndex == idx) ? -1 : idx;
-                                    });
-                                  }
+                                  setState(() {
+                                    _touchedPieIndex =
+                                        (_touchedPieIndex == idx) ? -1 : idx;
+                                  });
                                 },
                               ),
                               sections: List.generate(catStats.length, (i) {
@@ -288,7 +344,6 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                               }),
                             ),
                           ),
-                          // Center highlight label (pure focus, no popup drawer!)
                           SizedBox(
                             width: 108,
                             child: Column(
@@ -330,7 +385,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                                     ),
                                   ),
                                   Text(
-                                    '点击扇区高亮',
+                                    '轻点扇区/列表',
                                     style: TextStyle(
                                       fontSize: 10.5,
                                       color: g.secondaryTextColor,
@@ -361,7 +416,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                           ),
                           decoration: BoxDecoration(
                             color: highlighted
-                                ? item.color.withOpacity(0.12)
+                                ? item.color.withOpacity(0.16)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -418,38 +473,97 @@ class _StatsTabState extends ConsumerState<StatsTab> {
         ),
         const SizedBox(height: 12),
 
-        // CARD 2: Time Trend Chart
+        // CARD 2: Time Trend Chart with Tap-to-Pin Persistent Value Pill
         _StatsCard(
-          surfaceColor: g.surface.withOpacity(0.92),
+          themeConfig: themeCfg,
           title: _period == StatsPeriod.day
               ? '当日 24 小时支出分布'
               : _period == StatsPeriod.week
-                  ? '本周每日支出趋势 (周一至周日)'
+                  ? '本周每日支出趋势'
                   : '本月每日支出趋势',
           textColor: g.textColor,
           trailing: _period == StatsPeriod.month
               ? TextButton(
-                  onPressed: () =>
-                      setState(() => _monthAsLineChart = !_monthAsLineChart),
+                  onPressed: () => setState(() {
+                    _monthAsLineChart = !_monthAsLineChart;
+                    _selectedTrendIndex = null;
+                  }),
                   child: Text(_monthAsLineChart ? '切为柱状图' : '切为折线图'),
                 )
               : null,
-          child: SizedBox(
-            height: 200,
-            child: _buildTrendChart(
-              periodExpenses: periodExpenses,
-              start: start,
-              end: end,
-              primaryColor: g.primary,
-              textColor: g.secondaryTextColor,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Persistent pinned value capsule above chart (tap bar/point to pin!)
+              if (_selectedTrendIndex != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B).withOpacity(0.65),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.push_pin_rounded,
+                        size: 14,
+                        color: Color(0xFFD97706),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${trendFullLabels[_selectedTrendIndex!]}：$currency${trendValues[_selectedTrendIndex!].toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: g.textColor,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedTrendIndex = null),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: g.secondaryTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '轻点柱子或折线节点即可锁定查看具体金额',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: g.secondaryTextColor,
+                    ),
+                  ),
+                ),
+              SizedBox(
+                height: 200,
+                child: _buildTrendChart(
+                  values: trendValues,
+                  labels: trendLabels,
+                  primaryColor: g.primary,
+                  textColor: g.secondaryTextColor,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
 
-        // CARD 3: Workday vs Rest-day Comparison (Strict Natural Calendar Day Denominator)
+        // CARD 3: Workday vs Rest-day Comparison
         _StatsCard(
-          surfaceColor: g.surface.withOpacity(0.92),
+          themeConfig: themeCfg,
           title: '工作日 vs 休息日',
           textColor: g.textColor,
           trailing: Row(
@@ -490,7 +604,6 @@ class _StatsTabState extends ConsumerState<StatsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Dual-color ratio bar
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: SizedBox(
@@ -530,8 +643,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                       pctText: totalAmount > 0
                           ? '${(workTotal / totalAmount * 100).toStringAsFixed(1)}%'
                           : '0.0%',
-                      dailyAvgText:
-                          '日均 $currency${workAvg.toStringAsFixed(2)}',
+                      dailyAvgText: '日均 $currency${workAvg.toStringAsFixed(2)}',
                       textColor: g.textColor,
                       subTextColor: g.secondaryTextColor,
                     ),
@@ -545,8 +657,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
                       pctText: totalAmount > 0
                           ? '${(restTotal / totalAmount * 100).toStringAsFixed(1)}%'
                           : '0.0%',
-                      dailyAvgText:
-                          '日均 $currency${restAvg.toStringAsFixed(2)}',
+                      dailyAvgText: '日均 $currency${restAvg.toStringAsFixed(2)}',
                       textColor: g.textColor,
                       subTextColor: g.secondaryTextColor,
                     ),
@@ -581,45 +692,34 @@ class _StatsTabState extends ConsumerState<StatsTab> {
   }
 
   Widget _buildTrendChart({
-    required List<Expense> periodExpenses,
-    required DateTime start,
-    required DateTime end,
+    required List<double> values,
+    required List<String> labels,
     required Color primaryColor,
     required Color textColor,
   }) {
-    late List<double> values;
-    late List<String> labels;
-
-    if (_period == StatsPeriod.day) {
-      values = List<double>.filled(24, 0.0);
-      labels = List<String>.generate(24, (h) => '$h');
-      for (final e in periodExpenses) {
-        values[e.dateTime.hour] += e.amount;
-      }
-    } else if (_period == StatsPeriod.week) {
-      values = List<double>.filled(7, 0.0);
-      labels = const ['一', '二', '三', '四', '五', '六', '日'];
-      for (final e in periodExpenses) {
-        values[e.dateTime.weekday - 1] += e.amount;
-      }
-    } else {
-      final daysInMonth = end.day;
-      values = List<double>.filled(daysInMonth, 0.0);
-      labels = List<String>.generate(daysInMonth, (i) => '${i + 1}');
-      for (final e in periodExpenses) {
-        final idx = (e.dateTime.day - 1).clamp(0, daysInMonth - 1);
-        values[idx] += e.amount;
-      }
-    }
-
     final maxVal = values.fold<double>(0.0, (m, v) => v > m ? v : m);
     final maxY = maxVal <= 0 ? 10.0 : (maxVal * 1.2);
+    const highlightColor = Color(0xFFF59E0B);
 
     if (_period == StatsPeriod.month && _monthAsLineChart) {
       return LineChart(
         LineChartData(
           minY: 0,
           maxY: maxY,
+          lineTouchData: LineTouchData(
+            enabled: true,
+            handleBuiltInTouches: false,
+            touchCallback: (event, response) {
+              if (event is! FlTapUpEvent) return;
+              final spots = response?.lineBarSpots;
+              if (spots == null || spots.isEmpty) return;
+              final idx = spots.first.x.toInt();
+              if (idx < 0 || idx >= values.length) return;
+              setState(() {
+                _selectedTrendIndex = (_selectedTrendIndex == idx) ? null : idx;
+              });
+            },
+          ),
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
@@ -669,7 +769,18 @@ class _StatsTabState extends ConsumerState<StatsTab> {
               preventCurveOverShooting: true,
               color: primaryColor,
               barWidth: 2.5,
-              dotData: const FlDotData(show: false),
+              dotData: FlDotData(
+                show: true,
+                checkToShowDot: (spot, _) =>
+                    _selectedTrendIndex != null &&
+                    spot.x.toInt() == _selectedTrendIndex,
+                getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                  radius: 5.5,
+                  color: highlightColor,
+                  strokeWidth: 2,
+                  strokeColor: Colors.white,
+                ),
+              ),
               belowBarData: BarAreaData(
                 show: true,
                 color: primaryColor.withOpacity(0.16),
@@ -687,6 +798,18 @@ class _StatsTabState extends ConsumerState<StatsTab> {
     return BarChart(
       BarChartData(
         maxY: maxY,
+        barTouchData: BarTouchData(
+          enabled: true,
+          handleBuiltInTouches: false,
+          touchCallback: (event, response) {
+            if (event is! FlTapUpEvent) return;
+            final idx = response?.spot?.touchedBarGroupIndex;
+            if (idx == null || idx < 0 || idx >= values.length) return;
+            setState(() {
+              _selectedTrendIndex = (_selectedTrendIndex == idx) ? null : idx;
+            });
+          },
+        ),
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
@@ -729,19 +852,24 @@ class _StatsTabState extends ConsumerState<StatsTab> {
         ),
         barGroups: List.generate(
           values.length,
-          (i) => BarChartGroupData(
-            x: i,
-            barRods: [
-              BarChartRodData(
-                toY: values[i],
-                color: primaryColor,
-                width: _period == StatsPeriod.week ? 18 : 6,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(4),
+          (i) {
+            final isPinned = _selectedTrendIndex == i;
+            return BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: values[i],
+                  color: isPinned ? highlightColor : primaryColor,
+                  width: _period == StatsPeriod.week
+                      ? (isPinned ? 22 : 18)
+                      : (isPinned ? 8 : 6),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(4),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -749,14 +877,14 @@ class _StatsTabState extends ConsumerState<StatsTab> {
 }
 
 class _StatsCard extends StatelessWidget {
-  final Color surfaceColor;
+  final ThemeConfig themeConfig;
   final String title;
   final Color textColor;
   final Widget? trailing;
   final Widget child;
 
   const _StatsCard({
-    required this.surfaceColor,
+    required this.themeConfig,
     required this.title,
     required this.textColor,
     this.trailing,
@@ -765,12 +893,10 @@ class _StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassSurface(
+      themeConfig: themeConfig,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(18),
-      ),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

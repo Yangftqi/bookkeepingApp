@@ -5,6 +5,7 @@ import '../../models/expense.dart';
 import '../../providers/app_providers.dart';
 import '../../utils/date_utils_ext.dart';
 import '../../widgets/expense_card.dart';
+import '../../widgets/glass_surface.dart';
 import '../../widgets/pin_dialog.dart';
 import 'expense_editor_sheet.dart';
 
@@ -33,6 +34,12 @@ class _BillsTabState extends ConsumerState<BillsTab> {
 
   bool _batchMode = false;
   final Set<String> _selectedExpenseIds = {};
+
+  /// Minimalist translucent list mode (hides per-card background images to showcase global background).
+  bool _minimalistMode = false;
+
+  /// Pure background appreciation overlay (hides foreground UI until tapped).
+  bool _artPreviewMode = false;
 
   @override
   void dispose() {
@@ -215,6 +222,8 @@ class _BillsTabState extends ConsumerState<BillsTab> {
     final state = ref.watch(appControllerProvider);
     final themeCfg = state.activeTheme.config;
     final g = themeCfg.globalStyle;
+    final hasGlobalBg =
+        g.backgroundImagePath != null && g.backgroundImagePath!.isNotEmpty;
     final currency = state.settings.displayCurrency;
     final filtered = _applyFilter(state.expenses);
     final totalAmount = filtered.fold<double>(0.0, (sum, e) => sum + e.amount);
@@ -223,6 +232,31 @@ class _BillsTabState extends ConsumerState<BillsTab> {
         _datePreset != _DateRangePreset.all ||
         _selectedCategoryIds.isNotEmpty ||
         _dayTypeFilter != _DayTypeFilter.all;
+
+    // Pure background appreciation mode
+    if (_artPreviewMode && hasGlobalBg) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _artPreviewMode = false),
+        child: Stack(
+          children: [
+            const SizedBox.expand(),
+            Positioned(
+              right: 16,
+              bottom: 20,
+              child: FilledButton.tonalIcon(
+                onPressed: () => setState(() => _artPreviewMode = false),
+                icon: const Icon(Icons.visibility_rounded, size: 18),
+                label: const Text('退出赏图'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Add a breathable top hero space inside the scrollable list when a global background is present
+    final showHeroSpacer = hasGlobalBg && !_showFilters && !_batchMode;
 
     return Stack(
       children: [
@@ -234,47 +268,71 @@ class _BillsTabState extends ConsumerState<BillsTab> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      style: TextStyle(color: g.textColor, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: '搜索备注关键词...',
-                        hintStyle: TextStyle(color: g.secondaryTextColor),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          color: g.secondaryTextColor,
+                    child: GlassSurface(
+                      themeConfig: themeCfg,
+                      borderRadius: 14,
+                      child: TextField(
+                        controller: _searchCtrl,
+                        style: TextStyle(color: g.textColor, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: '搜索备注关键词...',
+                          hintStyle: TextStyle(color: g.secondaryTextColor),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            color: g.secondaryTextColor,
+                          ),
+                          suffixIcon: _keyword.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() => _keyword = '');
+                                  },
+                                )
+                              : null,
+                          filled: false,
+                          isDense: true,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 11,
+                          ),
                         ),
-                        suffixIcon: _keyword.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchCtrl.clear();
-                                  setState(() => _keyword = '');
-                                },
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: g.surface.withOpacity(0.9),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
+                        onChanged: (v) => setState(() => _keyword = v),
                       ),
-                      onChanged: (v) => setState(() => _keyword = v),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton.tonalIcon(
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: _minimalistMode ? '切回卡片主题图模式' : '切换极简高透列表模式',
+                    onPressed: () =>
+                        setState(() => _minimalistMode = !_minimalistMode),
+                    icon: Icon(
+                      _minimalistMode
+                          ? Icons.view_stream_rounded
+                          : Icons.view_agenda_outlined,
+                      size: 19,
+                    ),
+                  ),
+                  if (hasGlobalBg) ...[
+                    const SizedBox(width: 4),
+                    IconButton.filledTonal(
+                      tooltip: '纯净赏图模式',
+                      onPressed: () => setState(() => _artPreviewMode = true),
+                      icon: const Icon(Icons.photo_outlined, size: 19),
+                    ),
+                  ],
+                  const SizedBox(width: 4),
+                  IconButton.filledTonal(
+                    tooltip: '筛选',
                     onPressed: () =>
                         setState(() => _showFilters = !_showFilters),
                     icon: Icon(
                       hasActiveFilter
                           ? Icons.filter_alt_rounded
                           : Icons.filter_alt_outlined,
-                      size: 18,
+                      size: 19,
                     ),
-                    label: const Text('筛选'),
                   ),
                 ],
               ),
@@ -282,17 +340,14 @@ class _BillsTabState extends ConsumerState<BillsTab> {
 
             // Expandable Multi-dimensional Filter Panel
             if (_showFilters)
-              Container(
+              GlassSurface(
+                themeConfig: themeCfg,
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: g.surface.withOpacity(0.95),
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                borderRadius: 16,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Date presets
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -324,7 +379,6 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Category multi-select
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -345,7 +399,6 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                       }).toList(),
                     ),
                     const SizedBox(height: 8),
-                    // Day type & Sort row
                     Row(
                       children: [
                         Expanded(
@@ -439,14 +492,12 @@ class _BillsTabState extends ConsumerState<BillsTab> {
               ),
 
             // Pinned Real-time Summary Card + Batch Mode Toggle
-            Container(
+            GlassSurface(
+              themeConfig: themeCfg,
               margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: g.surface.withOpacity(0.92),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: g.primary.withOpacity(0.2)),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              borderRadius: 16,
+              border: Border.all(color: g.primary.withOpacity(0.22)),
               child: Row(
                 children: [
                   Expanded(
@@ -500,7 +551,7 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                           decoration: BoxDecoration(
                             color: _batchMode
                                 ? g.primary
-                                : g.primary.withOpacity(0.12),
+                                : g.primary.withOpacity(0.14),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
@@ -521,13 +572,11 @@ class _BillsTabState extends ConsumerState<BillsTab> {
 
             // Batch operation bar
             if (_batchMode)
-              Container(
+              GlassSurface(
+                themeConfig: themeCfg,
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: g.primary.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                borderRadius: 12,
                 child: Row(
                   children: [
                     TextButton(
@@ -578,30 +627,44 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                 ),
               ),
 
-            // Expense list
+            // Expense list (with breathable background spacer when global background is set)
             Expanded(
               child: filtered.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.receipt_long_outlined,
-                            size: 56,
-                            color: g.secondaryTextColor.withOpacity(0.5),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            hasActiveFilter ? '没有符合筛选条件的支出记录' : '暂无支出记录，点击右下角记一笔吧',
-                            style: TextStyle(color: g.secondaryTextColor),
-                          ),
-                        ],
+                      child: GlassSurface(
+                        themeConfig: themeCfg,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 20,
+                        ),
+                        borderRadius: 18,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 48,
+                              color: g.secondaryTextColor.withOpacity(0.7),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              hasActiveFilter
+                                  ? '没有符合筛选条件的支出记录'
+                                  : '暂无支出记录，点击右下角记一笔吧',
+                              style: TextStyle(color: g.secondaryTextColor),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.only(bottom: 88),
-                      itemCount: filtered.length,
-                      itemBuilder: (ctx, idx) {
+                      itemCount: filtered.length + (showHeroSpacer ? 1 : 0),
+                      itemBuilder: (ctx, rawIdx) {
+                        if (showHeroSpacer && rawIdx == 0) {
+                          return const SizedBox(height: 150);
+                        }
+                        final idx = showHeroSpacer ? rawIdx - 1 : rawIdx;
                         final exp = filtered[idx];
                         final cat = state.categoryById(exp.categoryId);
                         final selected = _selectedExpenseIds.contains(exp.id);
@@ -612,6 +675,7 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                           currencyPrefix: currency,
                           selectionMode: _batchMode,
                           isSelected: selected,
+                          minimalistMode: _minimalistMode,
                           onTap: () {
                             if (_batchMode) {
                               setState(() {

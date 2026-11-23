@@ -1,7 +1,7 @@
 name: bookkeeping_app
 description: 基米记账 - 本地多用户深度定制支出记账与宏观经济学洞察应用
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

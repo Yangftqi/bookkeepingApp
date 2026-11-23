@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_providers.dart';
+import '../widgets/glass_surface.dart';
 import '../widgets/themed_background.dart';
 import '../widgets/user_switcher_sheet.dart';
 import 'bills/bills_tab.dart';
@@ -46,9 +47,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          backgroundColor: g.surface.withOpacity(0.88),
+          backgroundColor:
+              GlassSurface.resolvedSurfaceColor(themeCfg, forBar: true),
           foregroundColor: g.textColor,
           elevation: 0,
+          scrolledUnderElevation: 0,
           titleSpacing: 12,
           title: Row(
             children: [
@@ -150,7 +153,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _tabIndex,
-          backgroundColor: g.surface.withOpacity(0.95),
+          backgroundColor:
+              GlassSurface.resolvedSurfaceColor(themeCfg, forBar: true),
           indicatorColor: g.primary.withOpacity(0.18),
           onDestinationSelected: (i) => setState(() => _tabIndex = i),
           destinations: const [

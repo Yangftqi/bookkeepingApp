@@ -7,6 +7,7 @@ import '../models/expense.dart';
 import '../models/theme_config.dart';
 import '../utils/date_utils_ext.dart';
 import 'dashed_border.dart';
+import 'glass_surface.dart';
 
 class ExpenseCard extends StatelessWidget {
   final Expense expense;
@@ -15,6 +16,7 @@ class ExpenseCard extends StatelessWidget {
   final String currencyPrefix;
   final bool selectionMode;
   final bool isSelected;
+  final bool minimalistMode;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -26,6 +28,7 @@ class ExpenseCard extends StatelessWidget {
     required this.currencyPrefix,
     this.selectionMode = false,
     this.isSelected = false,
+    this.minimalistMode = false,
     this.onTap,
     this.onLongPress,
   });
@@ -43,18 +46,49 @@ class ExpenseCard extends StatelessWidget {
         : themeConfig.dayTypeStyle.workday;
 
     final catBgPath = catStyle.backgroundImagePath;
-    final hasCatImage =
-        catBgPath != null && catBgPath.isNotEmpty && File(catBgPath).existsSync();
-    final readabilityOverlay = (g.isDarkText ? Colors.white : Colors.black)
-        .withOpacity(catStyle.cardOverlayOpacity.clamp(0.0, 0.92));
+    final hasCatImage = !minimalistMode &&
+        catBgPath != null &&
+        catBgPath.isNotEmpty &&
+        File(catBgPath).existsSync();
+
+    final hasGlobalBg =
+        g.backgroundImagePath != null && g.backgroundImagePath!.isNotEmpty;
+
+    // Directional gradient scrim for illustrated cards:
+    // Stronger readability on the left (category + note) and right edge (amount),
+    // clearer visual window in the center-right so anime character art shines cleanly!
+    final scrimBase = g.isDarkText ? Colors.white : Colors.black;
+    final op = catStyle.cardOverlayOpacity.clamp(0.0, 0.92);
+    final leftOp = (op * 1.18).clamp(0.18, 0.92);
+    final midOp = (op * 0.58).clamp(0.05, 0.85);
+    final rightOp = (op * 1.05).clamp(0.16, 0.90);
+
+    final textShadows = hasCatImage
+        ? <Shadow>[
+            Shadow(
+              color: (g.isDarkText ? Colors.white : Colors.black)
+                  .withOpacity(0.75),
+              blurRadius: 6,
+            ),
+          ]
+        : null;
+
+    final pillBackingColor = (g.isDarkText ? Colors.white : Colors.black)
+        .withOpacity(hasCatImage ? 0.68 : 0.0);
+
+    final minimalistFill = GlassSurface.resolvedSurfaceColor(themeConfig)
+        .withOpacity(minimalistMode && hasGlobalBg ? 0.58 : 0.72);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      padding: EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: minimalistMode ? 3.5 : 5,
+      ),
       child: BorderedCardContainer(
         borderColor: isSelected ? g.primary : dayStyle.borderColorObj,
         borderWidth: isSelected ? 2.4 : dayStyle.borderWidth,
         isDashed: !isSelected && dayStyle.isDashed,
-        borderRadius: 16,
+        borderRadius: minimalistMode ? 14 : 16,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -62,7 +96,7 @@ class ExpenseCard extends StatelessWidget {
             onLongPress: onLongPress,
             child: Stack(
               children: [
-                // Base layer: Category background image or global surfaceColor
+                // Base layer: Category background image OR frosted translucent surface
                 Positioned.fill(
                   child: hasCatImage
                       ? Image(
@@ -74,9 +108,14 @@ class ExpenseCard extends StatelessWidget {
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
                         )
-                      : ColoredBox(color: g.surface),
+                      : hasGlobalBg
+                          ? BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                              child: ColoredBox(color: minimalistFill),
+                            )
+                          : ColoredBox(color: g.surface),
                 ),
-                // Blur + readability overlay on category image
+                // Blur on illustrated category card
                 if (hasCatImage && catStyle.cardBlurSigma > 0.1)
                   Positioned.fill(
                     child: BackdropFilter(
@@ -87,25 +126,47 @@ class ExpenseCard extends StatelessWidget {
                       child: const SizedBox.expand(),
                     ),
                   ),
+                // Directional gradient readability scrim on illustrated category card
                 if (hasCatImage)
-                  Positioned.fill(child: ColoredBox(color: readabilityOverlay)),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          stops: const [0.0, 0.52, 0.78, 1.0],
+                          colors: [
+                            scrimBase.withOpacity(leftOp),
+                            scrimBase.withOpacity(midOp),
+                            scrimBase.withOpacity(midOp * 0.9),
+                            scrimBase.withOpacity(rightOp),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 // Workday / Rest-day tint overlay
                 if (dayStyle.tintOverlayColorObj.alpha > 0)
                   Positioned.fill(
                     child: ColoredBox(color: dayStyle.tintOverlayColorObj),
                   ),
-                // Foreground content with 6px left category accent bar
+                // Foreground content with left category accent bar
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Container(
-                        width: 6,
+                        width: minimalistMode ? 4.5 : 6,
                         color: catStyle.color,
                       ),
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                          padding: EdgeInsets.fromLTRB(
+                            11,
+                            minimalistMode ? 8 : 11,
+                            11,
+                            minimalistMode ? 8 : 11,
+                          ),
                           child: Row(
                             children: [
                               if (selectionMode) ...[
@@ -122,21 +183,23 @@ class ExpenseCard extends StatelessWidget {
                                   children: [
                                     Row(
                                       children: [
-                                        // Category name pill
+                                        // Category name pill with frosted backing on illustrated cards
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: catStyle.color
-                                                .withOpacity(0.18),
+                                            color: hasCatImage
+                                                ? pillBackingColor
+                                                : catStyle.color
+                                                    .withOpacity(0.18),
                                             borderRadius:
                                                 BorderRadius.circular(20),
                                             border: Border.all(
                                               color: catStyle.color
-                                                  .withOpacity(0.6),
-                                              width: 0.8,
+                                                  .withOpacity(0.75),
+                                              width: 1.0,
                                             ),
                                           ),
                                           child: Text(
@@ -159,6 +222,7 @@ class ExpenseCard extends StatelessWidget {
                                             style: TextStyle(
                                               fontSize: 11.5,
                                               color: g.secondaryTextColor,
+                                              shadows: textShadows,
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -185,7 +249,7 @@ class ExpenseCard extends StatelessWidget {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
+                                    SizedBox(height: minimalistMode ? 5 : 8),
                                     Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.end,
@@ -195,25 +259,47 @@ class ExpenseCard extends StatelessWidget {
                                             expense.note.trim().isEmpty
                                                 ? '无备注'
                                                 : expense.note.trim(),
-                                            maxLines: 2,
+                                            maxLines: minimalistMode ? 1 : 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 13.5,
+                                              fontWeight: hasCatImage
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
                                               color: expense.note.trim().isEmpty
                                                   ? g.secondaryTextColor
-                                                      .withOpacity(0.75)
+                                                      .withOpacity(0.8)
                                                   : g.textColor,
+                                              shadows: textShadows,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w800,
-                                            color: g.textColor,
-                                            letterSpacing: -0.3,
+                                        const SizedBox(width: 10),
+                                        // Amount with frosted pill backing on illustrated cards
+                                        Container(
+                                          padding: hasCatImage
+                                              ? const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 2,
+                                                )
+                                              : EdgeInsets.zero,
+                                          decoration: hasCatImage
+                                              ? BoxDecoration(
+                                                  color: pillBackingColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                )
+                                              : null,
+                                          child: Text(
+                                            '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize:
+                                                  minimalistMode ? 16.5 : 18,
+                                              fontWeight: FontWeight.w800,
+                                              color: g.textColor,
+                                              letterSpacing: -0.3,
+                                              shadows: textShadows,
+                                            ),
                                           ),
                                         ),
                                       ],

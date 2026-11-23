@@ -6,6 +6,7 @@ import '../../models/category.dart';
 import '../../models/economic_models.dart';
 import '../../providers/app_providers.dart';
 import '../../utils/date_utils_ext.dart';
+import '../../widgets/glass_surface.dart';
 import '../../widgets/pin_dialog.dart';
 import 'economics_api_dialog.dart';
 import 'economics_manage_screen.dart';
@@ -130,7 +131,9 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
-    final g = state.activeTheme.config.globalStyle;
+    final themeCfg = state.activeTheme.config;
+    final g = themeCfg.globalStyle;
+    final glassFill = GlassSurface.resolvedSurfaceColor(themeCfg);
     final currency = state.settings.displayCurrency;
     final metrics = state.economicMetrics;
 
@@ -230,7 +233,7 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.92),
+            color: glassFill,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
@@ -343,7 +346,7 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.92),
+            color: glassFill,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
@@ -456,7 +459,7 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.95),
+            color: glassFill,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: g.primary.withOpacity(0.35), width: 1.5),
           ),
@@ -615,7 +618,7 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: g.surface.withOpacity(0.92),
+            color: glassFill,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
