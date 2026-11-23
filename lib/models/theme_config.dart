@@ -6,6 +6,7 @@ class GlobalStyleConfig {
   final String primaryColor;
   final String surfaceColor;
   final bool isDarkText;
+  final bool accentTextFollowsPrimary;
   final String? backgroundImagePath;
   final double bgOverlayOpacity;
   final double bgBlurSigma;
@@ -16,6 +17,7 @@ class GlobalStyleConfig {
     required this.primaryColor,
     required this.surfaceColor,
     required this.isDarkText,
+    this.accentTextFollowsPrimary = true,
     this.backgroundImagePath,
     required this.bgOverlayOpacity,
     required this.bgBlurSigma,
@@ -33,11 +35,13 @@ class GlobalStyleConfig {
       isDarkText ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
   Color get secondaryTextColor =>
       isDarkText ? const Color(0xFF475569) : const Color(0xFFCBD5E1);
+  Color get accentTextColor => accentTextFollowsPrimary ? primary : textColor;
 
   GlobalStyleConfig copyWith({
     String? primaryColor,
     String? surfaceColor,
     bool? isDarkText,
+    bool? accentTextFollowsPrimary,
     String? backgroundImagePath,
     bool clearBackgroundImage = false,
     double? bgOverlayOpacity,
@@ -50,6 +54,8 @@ class GlobalStyleConfig {
       primaryColor: primaryColor ?? this.primaryColor,
       surfaceColor: surfaceColor ?? this.surfaceColor,
       isDarkText: isDarkText ?? this.isDarkText,
+      accentTextFollowsPrimary:
+          accentTextFollowsPrimary ?? this.accentTextFollowsPrimary,
       backgroundImagePath: clearBackgroundImage
           ? null
           : (backgroundImagePath ?? this.backgroundImagePath),
@@ -64,6 +70,7 @@ class GlobalStyleConfig {
         'primaryColor': primaryColor,
         'surfaceColor': surfaceColor,
         'isDarkText': isDarkText,
+        if (!accentTextFollowsPrimary) 'accentTextFollowsPrimary': false,
         'backgroundImagePath': backgroundImagePath,
         'bgOverlayOpacity': bgOverlayOpacity,
         'bgBlurSigma': bgBlurSigma,
@@ -77,6 +84,8 @@ class GlobalStyleConfig {
       primaryColor: json['primaryColor'] as String? ?? '#FF4F46E5',
       surfaceColor: json['surfaceColor'] as String? ?? '#E6FFFFFF',
       isDarkText: json['isDarkText'] as bool? ?? true,
+      accentTextFollowsPrimary:
+          json['accentTextFollowsPrimary'] as bool? ?? true,
       backgroundImagePath: json['backgroundImagePath'] as String?,
       bgOverlayOpacity: (json['bgOverlayOpacity'] as num?)?.toDouble() ?? 0.2,
       bgBlurSigma: (json['bgBlurSigma'] as num?)?.toDouble() ?? 0.0,

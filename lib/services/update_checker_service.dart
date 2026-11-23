@@ -20,7 +20,7 @@ class UpdateCheckResult {
 }
 
 class UpdateCheckerService {
-  static const String currentVersion = '1.2.2';
+  static const String currentVersion = '1.2.3';
   static const String repoUrl = 'https://github.com/Yangftqi/bookkeepingApp';
   static const String releasesUrl =
       'https://github.com/Yangftqi/bookkeepingApp/releases';

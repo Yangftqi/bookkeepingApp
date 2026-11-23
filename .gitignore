@@ -28,6 +28,7 @@ build/
 
 # Local specifications not pushed to remote
 theme_package_specification.md
+AGENT.md
 
 # Android local keystore & gradle
 android/key.properties

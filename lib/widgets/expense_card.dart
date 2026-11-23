@@ -224,18 +224,12 @@ class ExpenseCard extends StatelessWidget {
     final midOp = (op * 0.58).clamp(0.05, 0.85);
     final rightOp = (op * 1.05).clamp(0.16, 0.90);
 
-    final textShadows = hasCatImage
-        ? <Shadow>[
-            Shadow(
-              color: (g.isDarkText ? Colors.white : Colors.black)
-                  .withOpacity(0.75),
-              blurRadius: 6,
-            ),
-          ]
-        : null;
-
-    final pillBackingColor = (g.isDarkText ? Colors.white : Colors.black)
-        .withOpacity(hasCatImage ? 0.68 : 0.0);
+    final panelBackingColor =
+        (g.isDarkText ? Colors.white : const Color(0xFF0F172A))
+            .withOpacity(hasCatImage ? 0.78 : 0.0);
+    final panelBorderColor =
+        (g.isDarkText ? catStyle.color : Colors.white)
+            .withOpacity(hasCatImage ? 0.28 : 0.0);
 
     final cardGlassFill = GlassSurface.resolvedSurfaceColor(themeConfig);
 
@@ -363,131 +357,19 @@ class ExpenseCard extends StatelessWidget {
                                 const SizedBox(width: 4),
                               ],
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: hasCatImage
-                                                ? pillBackingColor
-                                                : catStyle.color
-                                                    .withOpacity(0.18),
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: catStyle.color
-                                                  .withOpacity(0.75),
-                                              width: 1.0,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            category.name,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: g.isDarkText
-                                                  ? catStyle.color
-                                                  : Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        if (!dayStyle.isRibbon)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 7,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: dayStyle.badgeColorObj,
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              dayStyle.badgeText,
-                                              style: const TextStyle(
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 5),
-                                    Text(
-                                      DateUtilsExt.toDateTimeStr(
-                                        expense.dateTime,
+                                child: hasCatImage
+                                    ? _buildIllustratedCardContent(
+                                        g: g,
+                                        catStyle: catStyle,
+                                        dayStyle: dayStyle,
+                                        panelBackingColor: panelBackingColor,
+                                        panelBorderColor: panelBorderColor,
+                                      )
+                                    : _buildPlainCardContent(
+                                        g: g,
+                                        catStyle: catStyle,
+                                        dayStyle: dayStyle,
                                       ),
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: g.secondaryTextColor,
-                                        shadows: textShadows,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 5),
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            expense.note.trim().isEmpty
-                                                ? '无备注'
-                                                : expense.note.trim(),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 13.5,
-                                              fontWeight: hasCatImage
-                                                  ? FontWeight.w600
-                                                  : FontWeight.normal,
-                                              color: expense.note.trim().isEmpty
-                                                  ? g.secondaryTextColor
-                                                      .withOpacity(0.8)
-                                                  : g.textColor,
-                                              shadows: textShadows,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Container(
-                                          padding: hasCatImage
-                                              ? const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 2,
-                                                )
-                                              : EdgeInsets.zero,
-                                          decoration: hasCatImage
-                                              ? BoxDecoration(
-                                                  color: pillBackingColor,
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                )
-                                              : null,
-                                          child: Text(
-                                            '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w800,
-                                              color: g.textColor,
-                                              letterSpacing: -0.3,
-                                              shadows: textShadows,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
                               ),
                             ],
                           ),
@@ -501,6 +383,234 @@ class ExpenseCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// Scheme A: Unified compact frosted info panel on the left (Category + Time + Note)
+  /// paired with a matching frosted amount badge on the bottom-right, leaving the center
+  /// illustration open and legible.
+  Widget _buildIllustratedCardContent({
+    required GlobalStyleConfig g,
+    required CategoryStyleConfig catStyle,
+    required DayTypeItemStyle dayStyle,
+    required Color panelBackingColor,
+    required Color panelBorderColor,
+  }) {
+    final trimmedNote = expense.note.trim();
+    final hasNote = trimmedNote.isNotEmpty;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: panelBackingColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: panelBorderColor, width: 0.9),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: catStyle.color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          category.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: g.textColor,
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3.5),
+                  Text(
+                    DateUtilsExt.toDateTimeStr(expense.dateTime),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: g.secondaryTextColor,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 3.5),
+                  Text(
+                    hasNote ? trimmedNote : '无备注',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: hasNote
+                          ? g.textColor
+                          : g.secondaryTextColor.withOpacity(0.82),
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!dayStyle.isRibbon)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: dayStyle.badgeColorObj,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  dayStyle.badgeText,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else
+              const SizedBox(height: 18),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: panelBackingColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: panelBorderColor, width: 0.9),
+              ),
+              child: Text(
+                '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 17.5,
+                  fontWeight: FontWeight.w800,
+                  color: g.textColor,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Plain glass card content (when no category illustration is set).
+  Widget _buildPlainCardContent({
+    required GlobalStyleConfig g,
+    required CategoryStyleConfig catStyle,
+    required DayTypeItemStyle dayStyle,
+  }) {
+    final trimmedNote = expense.note.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: catStyle.color.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: catStyle.color.withOpacity(0.75),
+                  width: 1.0,
+                ),
+              ),
+              child: Text(
+                category.name,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: g.isDarkText ? catStyle.color : Colors.white,
+                ),
+              ),
+            ),
+            const Spacer(),
+            if (!dayStyle.isRibbon)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: dayStyle.badgeColorObj,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  dayStyle.badgeText,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          DateUtilsExt.toDateTimeStr(expense.dateTime),
+          style: TextStyle(
+            fontSize: 11.5,
+            color: g.secondaryTextColor,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 5),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Text(
+                trimmedNote.isEmpty ? '无备注' : trimmedNote,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: trimmedNote.isEmpty
+                      ? g.secondaryTextColor.withOpacity(0.8)
+                      : g.textColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '-$currencyPrefix${expense.amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: g.textColor,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

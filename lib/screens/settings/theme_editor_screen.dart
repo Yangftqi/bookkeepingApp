@@ -539,6 +539,21 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                       );
                     }),
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('强调文字跟随主题主色（累计支出等）'),
+                    subtitle: const Text(
+                      '关闭后与正文一样随深/浅文字色切换',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: _config.globalStyle.accentTextFollowsPrimary,
+                    onChanged: (v) => setState(() {
+                      _config = _config.copyWith(
+                        globalStyle: _config.globalStyle
+                            .copyWith(accentTextFollowsPrimary: v),
+                      );
+                    }),
+                  ),
                   Row(
                     children: [
                       Expanded(

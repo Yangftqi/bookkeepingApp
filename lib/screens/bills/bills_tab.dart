@@ -15,6 +15,29 @@ enum _DayTypeFilter { all, workday, restDay }
 
 enum _ExpenseSort { timeDesc, timeAsc, amountDesc, amountAsc }
 
+/// Low-friction top-overscroll physics so pulling down past the top edge
+/// triggers Art Preview smoothly without heavy rubber-band resistance.
+class _LowFrictionPullDownPhysics extends BouncingScrollPhysics {
+  const _LowFrictionPullDownPhysics({super.parent});
+
+  @override
+  _LowFrictionPullDownPhysics applyTo(ScrollPhysics? ancestor) {
+    return _LowFrictionPullDownPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    if (offset > 0 && position.pixels <= position.minScrollExtent) {
+      final double overscroll =
+          (position.minScrollExtent - position.pixels).clamp(0.0, 240.0);
+      final double factor =
+          (0.72 - (overscroll / 240.0) * 0.27).clamp(0.45, 0.72);
+      return offset * factor;
+    }
+    return super.applyPhysicsToUserOffset(position, offset);
+  }
+}
+
 class BillsTab extends ConsumerStatefulWidget {
   const BillsTab({super.key});
 
@@ -43,7 +66,7 @@ class _BillsTabState extends ConsumerState<BillsTab> {
   double _pullDownDistance = 0.0;
   bool _armedArtPreview = false;
 
-  static const double _pullTriggerThreshold = 76.0;
+  static const double _pullTriggerThreshold = 42.0;
 
   @override
   void dispose() {
@@ -533,7 +556,7 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: g.primary,
+                            color: g.accentTextColor,
                           ),
                         ),
                       ],
@@ -575,7 +598,8 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
-                              color: _batchMode ? Colors.white : g.primary,
+                              color:
+                                  _batchMode ? Colors.white : g.accentTextColor,
                             ),
                           ),
                         ),
@@ -643,154 +667,183 @@ class _BillsTabState extends ConsumerState<BillsTab> {
                 ),
               ),
 
-            // Pull-down hint indicator when pulling past top to enter Art Preview
-            if (hasGlobalBg && _pullDownDistance > 12)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _armedArtPreview
-                          ? Icons.photo_rounded
-                          : Icons.arrow_downward_rounded,
-                      size: 15,
-                      color: g.primary,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      _armedArtPreview ? '松手进入纯净赏图' : '继续下拉进入纯净赏图',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: g.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
             // Expense list (pull down past top to enter Art Preview when global background is set)
             Expanded(
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (!hasGlobalBg) return false;
-                  if (notification is ScrollUpdateNotification) {
-                    final pixels = notification.metrics.pixels;
-                    if (pixels < 0) {
-                      final pull = -pixels;
-                      final armed = pull >= _pullTriggerThreshold;
-                      if ((pull - _pullDownDistance).abs() > 3 ||
-                          armed != _armedArtPreview) {
-                        setState(() {
-                          _pullDownDistance = pull;
-                          _armedArtPreview = armed;
-                        });
+              child: Stack(
+                children: [
+                  NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (!hasGlobalBg) return false;
+                      if (notification is ScrollUpdateNotification) {
+                        final pixels = notification.metrics.pixels;
+                        if (pixels < 0) {
+                          final pull = -pixels;
+                          final armed = pull >= _pullTriggerThreshold;
+                          if ((pull - _pullDownDistance).abs() > 2 ||
+                              armed != _armedArtPreview) {
+                            setState(() {
+                              _pullDownDistance = pull;
+                              _armedArtPreview = armed;
+                            });
+                          }
+                        } else if (_pullDownDistance > 0) {
+                          setState(() {
+                            _pullDownDistance = 0;
+                            _armedArtPreview = false;
+                          });
+                        }
+                      } else if (notification is ScrollEndNotification) {
+                        if (_armedArtPreview) {
+                          setState(() {
+                            _pullDownDistance = 0;
+                            _armedArtPreview = false;
+                            _artPreviewMode = true;
+                          });
+                        } else if (_pullDownDistance > 0) {
+                          setState(() {
+                            _pullDownDistance = 0;
+                            _armedArtPreview = false;
+                          });
+                        }
                       }
-                    } else if (_pullDownDistance > 0) {
-                      setState(() {
-                        _pullDownDistance = 0;
-                        _armedArtPreview = false;
-                      });
-                    }
-                  } else if (notification is ScrollEndNotification) {
-                    if (_armedArtPreview) {
-                      setState(() {
-                        _pullDownDistance = 0;
-                        _armedArtPreview = false;
-                        _artPreviewMode = true;
-                      });
-                    } else if (_pullDownDistance > 0) {
-                      setState(() {
-                        _pullDownDistance = 0;
-                        _armedArtPreview = false;
-                      });
-                    }
-                  }
-                  return false;
-                },
-                child: filtered.isEmpty
-                    ? ListView(
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                        padding: const EdgeInsets.only(top: 64, bottom: 88),
-                        children: [
-                          Center(
-                            child: GlassSurface(
-                              themeConfig: themeCfg,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 20,
+                      return false;
+                    },
+                    child: filtered.isEmpty
+                        ? ListView(
+                            physics: const _LowFrictionPullDownPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            padding: const EdgeInsets.only(top: 64, bottom: 88),
+                            children: [
+                              Center(
+                                child: GlassSurface(
+                                  themeConfig: themeCfg,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 20,
+                                  ),
+                                  borderRadius: 18,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.receipt_long_outlined,
+                                        size: 48,
+                                        color: g.secondaryTextColor
+                                            .withOpacity(0.7),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        hasActiveFilter
+                                            ? '没有符合筛选条件的支出记录'
+                                            : '暂无支出记录，点击右下角记一笔吧',
+                                        style: TextStyle(
+                                          color: g.secondaryTextColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                              borderRadius: 18,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.receipt_long_outlined,
-                                    size: 48,
-                                    color:
-                                        g.secondaryTextColor.withOpacity(0.7),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    hasActiveFilter
-                                        ? '没有符合筛选条件的支出记录'
-                                        : '暂无支出记录，点击右下角记一笔吧',
-                                    style:
-                                        TextStyle(color: g.secondaryTextColor),
-                                  ),
-                                ],
+                            ],
+                          )
+                        : ListView.builder(
+                            physics: const _LowFrictionPullDownPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            padding: const EdgeInsets.only(bottom: 88),
+                            itemCount: filtered.length,
+                            itemBuilder: (ctx, idx) {
+                              final exp = filtered[idx];
+                              final cat = state.categoryById(exp.categoryId);
+                              final selected =
+                                  _selectedExpenseIds.contains(exp.id);
+                              return ExpenseCard(
+                                expense: exp,
+                                category: cat,
+                                themeConfig: themeCfg,
+                                currencyPrefix: currency,
+                                selectionMode: _batchMode,
+                                isSelected: selected,
+                                minimalistMode: _minimalistMode,
+                                onTap: () {
+                                  if (_batchMode) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedExpenseIds.remove(exp.id);
+                                      } else {
+                                        _selectedExpenseIds.add(exp.id);
+                                      }
+                                    });
+                                  } else {
+                                    showExpenseEditorSheet(
+                                      context,
+                                      ref,
+                                      existing: exp,
+                                    );
+                                  }
+                                },
+                                onLongPress: () {
+                                  setState(() {
+                                    _batchMode = true;
+                                    _selectedExpenseIds.add(exp.id);
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                  if (hasGlobalBg && _pullDownDistance > 8)
+                    Positioned(
+                      top: 6,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: GlassSurface.resolvedSurfaceColor(themeCfg)
+                                  .withOpacity(0.88),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: g.primary.withOpacity(
+                                  _armedArtPreview ? 0.55 : 0.25,
+                                ),
+                                width: 1,
                               ),
                             ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _armedArtPreview
+                                      ? Icons.photo_rounded
+                                      : Icons.arrow_downward_rounded,
+                                  size: 14,
+                                  color: g.accentTextColor,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _armedArtPreview
+                                      ? '松手进入纯净赏图'
+                                      : '继续下拉进入纯净赏图',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: g.accentTextColor,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      )
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
                         ),
-                        padding: const EdgeInsets.only(bottom: 88),
-                        itemCount: filtered.length,
-                        itemBuilder: (ctx, idx) {
-                          final exp = filtered[idx];
-                          final cat = state.categoryById(exp.categoryId);
-                          final selected = _selectedExpenseIds.contains(exp.id);
-                          return ExpenseCard(
-                            expense: exp,
-                            category: cat,
-                            themeConfig: themeCfg,
-                            currencyPrefix: currency,
-                            selectionMode: _batchMode,
-                            isSelected: selected,
-                            minimalistMode: _minimalistMode,
-                            onTap: () {
-                              if (_batchMode) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedExpenseIds.remove(exp.id);
-                                  } else {
-                                    _selectedExpenseIds.add(exp.id);
-                                  }
-                                });
-                              } else {
-                                showExpenseEditorSheet(
-                                  context,
-                                  ref,
-                                  existing: exp,
-                                );
-                              }
-                            },
-                            onLongPress: () {
-                              setState(() {
-                                _batchMode = true;
-                                _selectedExpenseIds.add(exp.id);
-                              });
-                            },
-                          );
-                        },
                       ),
+                    ),
+                ],
               ),
             ),
           ],

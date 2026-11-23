@@ -269,5 +269,22 @@ void main() {
       );
       expect(claudeModels, ['claude-sonnet-4-20250514']);
     });
+
+    test('GlobalStyleConfig accentTextFollowsPrimary defaults true and toggles cleanly', () {
+      final legacy = GlobalStyleConfig.fromJson({
+        'primaryColor': '#FF4F46E5',
+        'surfaceColor': '#E6FFFFFF',
+        'isDarkText': true,
+      });
+      expect(legacy.accentTextFollowsPrimary, isTrue);
+      expect(legacy.accentTextColor, legacy.primary);
+      expect(legacy.toJson().containsKey('accentTextFollowsPrimary'), isFalse);
+
+      final decoupled = legacy.copyWith(accentTextFollowsPrimary: false);
+      expect(decoupled.accentTextColor, decoupled.textColor);
+      final roundTrip = GlobalStyleConfig.fromJson(decoupled.toJson());
+      expect(roundTrip.accentTextFollowsPrimary, isFalse);
+      expect(roundTrip.accentTextColor, roundTrip.textColor);
+    });
   });
 }

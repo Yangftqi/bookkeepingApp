@@ -486,7 +486,7 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
                         style: TextStyle(
                           fontSize: 34,
                           fontWeight: FontWeight.w900,
-                          color: g.primary,
+                          color: g.accentTextColor,
                         ),
                       ),
                     ],
@@ -517,7 +517,7 @@ class _EconomicsCompareViewState extends ConsumerState<EconomicsCompareView> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
-                              color: g.primary,
+                              color: g.accentTextColor,
                             ),
                           ),
                         ],

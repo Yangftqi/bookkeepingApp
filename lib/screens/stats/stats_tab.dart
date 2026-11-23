@@ -280,7 +280,7 @@ class _StatsTabState extends ConsumerState<StatsTab> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: g.primary,
+              color: g.accentTextColor,
             ),
           ),
           child: catStats.isEmpty
