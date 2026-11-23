@@ -885,15 +885,33 @@ class BackupService {
     final presets = ((settingsRaw['ai_role_presets'] as List?) ?? const [])
         .map((e) => AiRolePreset.fromJson((e as Map).cast<String, dynamic>()))
         .toList();
+    final rawProfiles = (settingsRaw['llm_profiles'] as List?) ?? const [];
+    final restoredProfiles = rawProfiles.isNotEmpty
+        ? rawProfiles
+            .map((e) => LlmProfile.fromJson((e as Map).cast<String, dynamic>()))
+            .toList()
+        : [
+            LlmProfile(
+              id: 'default_llm_profile',
+              name: '默认配置',
+              apiFormat: LlmApiFormat.openaiCompatible,
+              baseUrl: (settingsRaw['llm_base_url'] as String?) ??
+                  'https://api.deepseek.com/v1',
+              apiKey: (settingsRaw['llm_api_key'] as String?) ?? '',
+              modelName:
+                  (settingsRaw['llm_model_name'] as String?) ?? 'deepseek-chat',
+            ),
+          ];
+    final restoredActiveProfileId =
+        (settingsRaw['active_llm_profile_id'] as String?) ??
+            restoredProfiles.first.id;
+
     final restoredSettings = AppSettings(
       masterPinHash: settingsRaw['master_pin_hash'] as String?,
       masterPinSalt: settingsRaw['master_pin_salt'] as String?,
       currencySymbol: (settingsRaw['currency_symbol'] as String?) ?? '¥',
-      llmBaseUrl: (settingsRaw['llm_base_url'] as String?) ??
-          'https://api.deepseek.com/v1',
-      llmApiKey: (settingsRaw['llm_api_key'] as String?) ?? '',
-      llmModelName:
-          (settingsRaw['llm_model_name'] as String?) ?? 'deepseek-chat',
+      llmProfiles: restoredProfiles,
+      activeLlmProfileId: restoredActiveProfileId,
       aiRolePresets: presets,
       currentActiveUserId: settingsRaw['current_active_user_id'] as String?,
     );

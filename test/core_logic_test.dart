@@ -229,5 +229,45 @@ void main() {
       expect(roundTrip.cardStylePool.first.defaultCategory, '吃的');
       expect(roundTrip.cardStylePool.first.style.themeColor, '#FFF43F5E');
     });
+
+    test('parses model lists for OpenAI, Gemini native, and Claude native APIs', () {
+      final openAiModels = LlmService.parseModelListResponse(
+        LlmApiFormat.openaiCompatible,
+        {
+          'data': [
+            {'id': 'deepseek-reasoner'},
+            {'id': 'deepseek-chat'},
+          ],
+        },
+      );
+      expect(openAiModels, ['deepseek-chat', 'deepseek-reasoner']);
+
+      final geminiModels = LlmService.parseModelListResponse(
+        LlmApiFormat.gemini,
+        {
+          'models': [
+            {
+              'name': 'models/gemini-2.5-flash',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+            {
+              'name': 'models/text-embedding-004',
+              'supportedGenerationMethods': ['embedContent'],
+            },
+          ],
+        },
+      );
+      expect(geminiModels, ['gemini-2.5-flash']);
+
+      final claudeModels = LlmService.parseModelListResponse(
+        LlmApiFormat.claude,
+        {
+          'data': [
+            {'id': 'claude-sonnet-4-20250514'},
+          ],
+        },
+      );
+      expect(claudeModels, ['claude-sonnet-4-20250514']);
+    });
   });
 }

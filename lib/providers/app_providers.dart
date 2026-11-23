@@ -340,16 +340,29 @@ class AppController extends StateNotifier<AppState> {
     state = state.copyWith(settings: updated);
   }
 
-  Future<void> updateLlmConfig({
-    required String baseUrl,
-    required String apiKey,
-    required String modelName,
+  Future<void> saveLlmProfiles(
+    List<LlmProfile> profiles, {
+    String? activeProfileId,
   }) async {
+    final safeList =
+        profiles.isEmpty ? const [LlmProfile.defaultProfile] : profiles;
+    final resolvedActive = activeProfileId != null &&
+            safeList.any((p) => p.id == activeProfileId)
+        ? activeProfileId
+        : (safeList.any((p) => p.id == state.settings.activeLlmProfileId)
+            ? state.settings.activeLlmProfileId
+            : safeList.first.id);
     final updated = state.settings.copyWith(
-      llmBaseUrl: baseUrl.trim(),
-      llmApiKey: apiKey.trim(),
-      llmModelName: modelName.trim(),
+      llmProfiles: safeList,
+      activeLlmProfileId: resolvedActive,
     );
+    await _settingsService.save(updated);
+    state = state.copyWith(settings: updated);
+  }
+
+  Future<void> selectActiveLlmProfile(String profileId) async {
+    if (!state.settings.llmProfiles.any((p) => p.id == profileId)) return;
+    final updated = state.settings.copyWith(activeLlmProfileId: profileId);
     await _settingsService.save(updated);
     state = state.copyWith(settings: updated);
   }

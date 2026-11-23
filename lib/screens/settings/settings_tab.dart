@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/app_providers.dart';
 import '../../services/update_checker_service.dart';
 import '../../widgets/pin_dialog.dart';
-import '../insights/llm_config_dialog.dart';
 import '../insights/role_presets_dialog.dart';
 import 'backup_center_screen.dart';
 import 'category_management_screen.dart';
+import 'llm_profiles_screen.dart';
 import 'theme_workshop_screen.dart';
 import 'user_management_screen.dart';
 
@@ -363,13 +363,15 @@ class SettingsTab extends ConsumerWidget {
               style: TextStyle(fontWeight: FontWeight.w700, color: g.textColor),
             ),
             subtitle: Text(
-              '当前模型：${state.settings.llmModelName}',
+              '当前：${state.settings.activeLlmProfile.name} (${state.settings.llmModelName})',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12, color: g.secondaryTextColor),
             ),
             trailing: Icon(Icons.chevron_right_rounded, color: g.secondaryTextColor),
-            onTap: () => showLlmConfigDialog(context, ref),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LlmProfilesScreen()),
+            ),
           ),
           const Divider(height: 1, indent: 68),
           ListTile(

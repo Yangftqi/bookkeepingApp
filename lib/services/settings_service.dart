@@ -12,6 +12,8 @@ class SettingsService {
   static const _kLlmBaseUrl = 'llm_base_url';
   static const _kLlmApiKey = 'llm_api_key';
   static const _kLlmModelName = 'llm_model_name';
+  static const _kLlmProfilesJson = 'llm_profiles_json';
+  static const _kActiveLlmProfileId = 'active_llm_profile_id';
   static const _kAiRolePresets = 'ai_role_presets_json';
   static const _kAiRolePresetsVersion = 'ai_role_presets_version';
   static const _kCurrentActiveUserId = 'current_active_user_id';
@@ -33,7 +35,6 @@ class SettingsService {
         final parsed = decoded
             .map((e) => AiRolePreset.fromJson((e as Map).cast<String, dynamic>()))
             .map((p) {
-              // Backfill tagline if upgrading from v1
               if (p.tagline.isEmpty && builtinById.containsKey(p.id)) {
                 return p.copyWith(tagline: builtinById[p.id]!.tagline);
               }
@@ -43,7 +44,6 @@ class SettingsService {
 
         if (parsed.isNotEmpty) {
           if (savedVer < _currentPresetsVersion) {
-            // One-time migration to add the 6 new anime role presets
             final existingIds = parsed.map((p) => p.id).toSet();
             for (final b in builtinDefaults) {
               if (!existingIds.contains(b.id)) {
@@ -63,14 +63,50 @@ class SettingsService {
       await prefs.setInt(_kAiRolePresetsVersion, _currentPresetsVersion);
     }
 
+    // Load multi-profile LLM configurations (with seamless migration from v1 single config)
+    List<LlmProfile> llmProfiles = const [LlmProfile.defaultProfile];
+    String? activeProfileId = prefs.getString(_kActiveLlmProfileId);
+    final rawProfiles = prefs.getString(_kLlmProfilesJson);
+    if (rawProfiles != null && rawProfiles.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawProfiles) as List;
+        final parsed = decoded
+            .map((e) => LlmProfile.fromJson((e as Map).cast<String, dynamic>()))
+            .toList();
+        if (parsed.isNotEmpty) {
+          llmProfiles = parsed;
+        }
+      } catch (_) {}
+    } else {
+      final legacyBase = prefs.getString(_kLlmBaseUrl);
+      final legacyKey = prefs.getString(_kLlmApiKey);
+      final legacyModel = prefs.getString(_kLlmModelName);
+      if (legacyBase != null || legacyKey != null || legacyModel != null) {
+        llmProfiles = [
+          LlmProfile(
+            id: 'default_llm_profile',
+            name: '默认配置',
+            apiFormat: LlmApiFormat.openaiCompatible,
+            baseUrl: legacyBase ?? 'https://api.deepseek.com/v1',
+            apiKey: legacyKey ?? '',
+            modelName: legacyModel ?? 'deepseek-chat',
+          ),
+        ];
+        activeProfileId = 'default_llm_profile';
+      }
+    }
+
+    if (activeProfileId == null ||
+        !llmProfiles.any((p) => p.id == activeProfileId)) {
+      activeProfileId = llmProfiles.first.id;
+    }
+
     return AppSettings(
       masterPinHash: prefs.getString(_kMasterPinHash),
       masterPinSalt: prefs.getString(_kMasterPinSalt),
       currencySymbol: prefs.getString(_kCurrencySymbol) ?? '¥',
-      llmBaseUrl:
-          prefs.getString(_kLlmBaseUrl) ?? 'https://api.deepseek.com/v1',
-      llmApiKey: prefs.getString(_kLlmApiKey) ?? '',
-      llmModelName: prefs.getString(_kLlmModelName) ?? 'deepseek-chat',
+      llmProfiles: llmProfiles,
+      activeLlmProfileId: activeProfileId,
       aiRolePresets: presets,
       currentActiveUserId: prefs.getString(_kCurrentActiveUserId),
     );
@@ -85,6 +121,12 @@ class SettingsService {
       await prefs.setString(_kMasterPinSalt, settings.masterPinSalt!);
     }
     await prefs.setString(_kCurrencySymbol, settings.currencySymbol);
+    await prefs.setString(
+      _kLlmProfilesJson,
+      jsonEncode(settings.llmProfiles.map((e) => e.toJson()).toList()),
+    );
+    await prefs.setString(_kActiveLlmProfileId, settings.activeLlmProfile.id);
+    // Keep legacy keys in sync for safety
     await prefs.setString(_kLlmBaseUrl, settings.llmBaseUrl);
     await prefs.setString(_kLlmApiKey, settings.llmApiKey);
     await prefs.setString(_kLlmModelName, settings.llmModelName);

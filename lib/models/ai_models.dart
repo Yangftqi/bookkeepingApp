@@ -1,3 +1,177 @@
+enum LlmApiFormat {
+  openaiCompatible,
+  gemini,
+  claude,
+}
+
+extension LlmApiFormatExt on LlmApiFormat {
+  String get wireValue {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return 'openai_compatible';
+      case LlmApiFormat.gemini:
+        return 'gemini';
+      case LlmApiFormat.claude:
+        return 'claude';
+    }
+  }
+
+  String get displayName {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return 'OpenAI 兼容格式';
+      case LlmApiFormat.gemini:
+        return 'Google Gemini 原生格式';
+      case LlmApiFormat.claude:
+        return 'Anthropic Claude 原生格式';
+    }
+  }
+
+  String get shortBadge {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return 'OpenAI 兼容';
+      case LlmApiFormat.gemini:
+        return 'Gemini 原生';
+      case LlmApiFormat.claude:
+        return 'Claude 原生';
+    }
+  }
+
+  String get providersHint {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return '适用：OpenAI、DeepSeek、通义千问、硅基流动、智谱、Kimi、OpenRouter、Ollama 等';
+      case LlmApiFormat.gemini:
+        return '适用：Google AI Studio / Gemini 官方原生接口及原生中转站';
+      case LlmApiFormat.claude:
+        return '适用：Anthropic Claude 官方接口及 Claude 原生中转站';
+    }
+  }
+
+  String get defaultBaseUrl {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return 'https://api.deepseek.com/v1';
+      case LlmApiFormat.gemini:
+        return 'https://generativelanguage.googleapis.com/v1beta';
+      case LlmApiFormat.claude:
+        return 'https://api.anthropic.com/v1';
+    }
+  }
+
+  String get defaultModel {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return 'deepseek-chat';
+      case LlmApiFormat.gemini:
+        return 'gemini-2.5-flash';
+      case LlmApiFormat.claude:
+        return 'claude-sonnet-4-20250514';
+    }
+  }
+
+  List<Map<String, String>> get quickBaseUrls {
+    switch (this) {
+      case LlmApiFormat.openaiCompatible:
+        return const [
+          {'label': 'DeepSeek 官方', 'url': 'https://api.deepseek.com/v1'},
+          {'label': 'OpenAI 官方', 'url': 'https://api.openai.com/v1'},
+          {'label': '通义千问 (DashScope)', 'url': 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
+          {'label': '硅基流动 (SiliconFlow)', 'url': 'https://api.siliconflow.cn/v1'},
+          {'label': 'OpenRouter', 'url': 'https://openrouter.ai/api/v1'},
+          {'label': 'Google Gemini (OpenAI兼容)', 'url': 'https://generativelanguage.googleapis.com/v1beta/openai'},
+          {'label': '本地 Ollama', 'url': 'http://127.0.0.1:11434/v1'},
+        ];
+      case LlmApiFormat.gemini:
+        return const [
+          {'label': 'Google AI Studio 官方', 'url': 'https://generativelanguage.googleapis.com/v1beta'},
+        ];
+      case LlmApiFormat.claude:
+        return const [
+          {'label': 'Anthropic 官方', 'url': 'https://api.anthropic.com/v1'},
+        ];
+    }
+  }
+
+  static LlmApiFormat fromWire(String? value) {
+    switch (value) {
+      case 'gemini':
+        return LlmApiFormat.gemini;
+      case 'claude':
+        return LlmApiFormat.claude;
+      case 'openai_compatible':
+      default:
+        return LlmApiFormat.openaiCompatible;
+    }
+  }
+}
+
+class LlmProfile {
+  final String id;
+  final String name;
+  final LlmApiFormat apiFormat;
+  final String baseUrl;
+  final String apiKey;
+  final String modelName;
+
+  const LlmProfile({
+    required this.id,
+    required this.name,
+    this.apiFormat = LlmApiFormat.openaiCompatible,
+    required this.baseUrl,
+    this.apiKey = '',
+    required this.modelName,
+  });
+
+  static const LlmProfile defaultProfile = LlmProfile(
+    id: 'default_llm_profile',
+    name: '默认配置',
+    apiFormat: LlmApiFormat.openaiCompatible,
+    baseUrl: 'https://api.deepseek.com/v1',
+    apiKey: '',
+    modelName: 'deepseek-chat',
+  );
+
+  LlmProfile copyWith({
+    String? id,
+    String? name,
+    LlmApiFormat? apiFormat,
+    String? baseUrl,
+    String? apiKey,
+    String? modelName,
+  }) {
+    return LlmProfile(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      apiFormat: apiFormat ?? this.apiFormat,
+      baseUrl: baseUrl ?? this.baseUrl,
+      apiKey: apiKey ?? this.apiKey,
+      modelName: modelName ?? this.modelName,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'apiFormat': apiFormat.wireValue,
+        'baseUrl': baseUrl,
+        'apiKey': apiKey,
+        'modelName': modelName,
+      };
+
+  factory LlmProfile.fromJson(Map<String, dynamic> json) {
+    return LlmProfile(
+      id: (json['id'] as String?) ?? 'default_llm_profile',
+      name: (json['name'] as String?) ?? '默认配置',
+      apiFormat: LlmApiFormatExt.fromWire(json['apiFormat'] as String?),
+      baseUrl: (json['baseUrl'] as String?) ?? 'https://api.deepseek.com/v1',
+      apiKey: (json['apiKey'] as String?) ?? '',
+      modelName: (json['modelName'] as String?) ?? 'deepseek-chat',
+    );
+  }
+}
+
 class AiRolePreset {
   final String id;
   final String name;

@@ -69,8 +69,9 @@ class _EconomicsApiDialogState extends ConsumerState<_EconomicsApiDialog>
       return;
     }
     final settings = ref.read(appControllerProvider).settings;
-    if (settings.llmBaseUrl.trim().isEmpty ||
-        settings.llmModelName.trim().isEmpty) {
+    final activeProfile = settings.activeLlmProfile;
+    if (activeProfile.baseUrl.trim().isEmpty ||
+        activeProfile.modelName.trim().isEmpty) {
       setState(() => _error = '请先在 AI 账单分析师或设置中配置大模型 API 地址与模型名');
       return;
     }
@@ -82,9 +83,7 @@ class _EconomicsApiDialogState extends ConsumerState<_EconomicsApiDialog>
     });
     try {
       final result = await LlmService.generateEconomicModel(
-        baseUrl: settings.llmBaseUrl,
-        apiKey: settings.llmApiKey,
-        modelName: settings.llmModelName,
+        profile: activeProfile,
         topic: topic,
       );
       if (mounted) {

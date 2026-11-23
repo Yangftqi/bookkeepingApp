@@ -12,7 +12,7 @@ import '../../providers/app_providers.dart';
 import '../../services/llm_service.dart';
 import '../../utils/date_utils_ext.dart';
 import '../../widgets/pin_dialog.dart';
-import 'llm_config_dialog.dart';
+import '../settings/llm_profiles_screen.dart';
 import 'role_presets_dialog.dart';
 
 class AiAnalystView extends ConsumerStatefulWidget {
@@ -246,12 +246,15 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
     if (user == null) return;
 
     final settings = state.settings;
-    if (settings.llmBaseUrl.trim().isEmpty ||
-        settings.llmModelName.trim().isEmpty) {
+    final activeProfile = settings.activeLlmProfile;
+    if (activeProfile.baseUrl.trim().isEmpty ||
+        activeProfile.modelName.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先点击右上角配置大模型 API 地址与模型名称')),
+        const SnackBar(content: Text('请先配置大模型 API 地址与模型名称')),
       );
-      await showLlmConfigDialog(context, ref);
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LlmProfilesScreen()),
+      );
       return;
     }
 
@@ -328,9 +331,7 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
     ];
 
     final stream = LlmService.streamChat(
-      baseUrl: settings.llmBaseUrl,
-      apiKey: settings.llmApiKey,
-      modelName: settings.llmModelName,
+      profile: activeProfile,
       messages: apiMessages,
     );
 
@@ -377,6 +378,93 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
       });
       _scrollToBottom();
     }
+  }
+
+  Future<void> _showQuickSwitchProfileSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final settings = ref.watch(appControllerProvider).settings;
+          final profiles = settings.llmProfiles;
+          final activeId = settings.activeLlmProfile.id;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '切换大模型 API 配置',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LlmProfilesScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.settings_outlined, size: 17),
+                        label: const Text('管理配置'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: profiles.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final p = profiles[i];
+                        final isCurrent = p.id == activeId;
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            '${p.name}  (${p.apiFormat.shortBadge})',
+                            style: TextStyle(
+                              fontWeight: isCurrent
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          subtitle: Text(
+                            p.modelName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: isCurrent
+                              ? const Icon(Icons.check_circle, size: 18)
+                              : null,
+                          onTap: () async {
+                            await ref
+                                .read(appControllerProvider.notifier)
+                                .selectActiveLlmProfile(p.id);
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _openSessionHistory() async {
@@ -567,11 +655,6 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
                     icon: const Icon(Icons.masks_outlined),
                   ),
                   IconButton(
-                    tooltip: 'API 配置',
-                    onPressed: () => showLlmConfigDialog(context, ref),
-                    icon: const Icon(Icons.key_rounded),
-                  ),
-                  IconButton(
                     tooltip: '历史会话',
                     onPressed: _openSessionHistory,
                     icon: const Icon(Icons.history_rounded),
@@ -584,6 +667,15 @@ class _AiAnalystViewState extends ConsumerState<AiAnalystView> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.swap_horiz_rounded, size: 15),
+                    label: Text(
+                      state.settings.activeLlmProfile.name,
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _showQuickSwitchProfileSheet,
+                  ),
                   ActionChip(
                     avatar: const Icon(Icons.date_range_rounded, size: 15),
                     label: Text(
