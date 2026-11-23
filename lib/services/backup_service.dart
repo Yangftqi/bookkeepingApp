@@ -457,39 +457,68 @@ class BackupService {
 
     final archive = Archive();
     final exportedCategoryStyles = <String, dynamic>{};
+    final packedPathCache = <String, String>{};
+    var assetIdx = 0;
 
-    // Export global background image if present
-    String? globalAssetRelPath;
-    final rawGlobalBg = theme.config.globalStyle.backgroundImagePath;
-    if (rawGlobalBg != null && await File(rawGlobalBg).exists()) {
-      final ext = p.extension(rawGlobalBg).isEmpty ? '.jpg' : p.extension(rawGlobalBg);
-      globalAssetRelPath = 'assets/global_bg$ext';
-      final imgBytes = await File(rawGlobalBg).readAsBytes();
-      archive.addFile(ArchiveFile(globalAssetRelPath, imgBytes.length, imgBytes));
+    Future<String?> packThemeAsset(String? localPath, String prefix) async {
+      if (localPath == null || localPath.isEmpty) return null;
+      if (packedPathCache.containsKey(localPath)) {
+        return packedPathCache[localPath];
+      }
+      final file = File(localPath);
+      if (!await file.exists()) return null;
+      final ext = p.extension(localPath).isEmpty ? '.jpg' : p.extension(localPath);
+      final relPath = 'assets/${prefix}_${assetIdx++}$ext';
+      final imgBytes = await file.readAsBytes();
+      archive.addFile(ArchiveFile(relPath, imgBytes.length, imgBytes));
+      packedPathCache[localPath] = relPath;
+      return relPath;
     }
 
-    var catIdx = 0;
+    // Export global background image if present
+    final globalAssetRelPath = await packThemeAsset(
+      theme.config.globalStyle.backgroundImagePath,
+      'global_bg',
+    );
+
     for (final entry in theme.config.categoryStyles.entries) {
       final cat = catById[entry.key];
       final catName = cat?.name ?? entry.key;
       final defaultColor = cat?.defaultColorHex ?? entry.value.themeColor;
 
-      String? catAssetRelPath;
-      final rawCatBg = entry.value.backgroundImagePath;
-      if (rawCatBg != null && await File(rawCatBg).exists()) {
-        final ext = p.extension(rawCatBg).isEmpty ? '.jpg' : p.extension(rawCatBg);
-        catAssetRelPath = 'assets/cat_${catIdx++}$ext';
-        final imgBytes = await File(rawCatBg).readAsBytes();
-        archive.addFile(ArchiveFile(catAssetRelPath, imgBytes.length, imgBytes));
-      }
+      final catAssetRelPath = await packThemeAsset(
+        entry.value.backgroundImagePath,
+        'cat',
+      );
 
       exportedCategoryStyles[catName] = {
-        ...entry.value.copyWith(
-          backgroundImagePath: catAssetRelPath,
-          clearBackgroundImage: catAssetRelPath == null,
-        ).toJson(),
+        ...entry.value
+            .copyWith(
+              backgroundImagePath: catAssetRelPath,
+              clearBackgroundImage: catAssetRelPath == null,
+            )
+            .toJson(),
         'default_color_hex': defaultColor,
       };
+    }
+
+    // Export candidate card style pool (including unbound styles & their assets!)
+    final exportedPool = <Map<String, dynamic>>[];
+    for (final preset in theme.config.cardStylePool) {
+      final relPath = await packThemeAsset(
+        preset.style.backgroundImagePath,
+        'pool',
+      );
+      exportedPool.add(
+        preset
+            .copyWith(
+              style: preset.style.copyWith(
+                backgroundImagePath: relPath,
+                clearBackgroundImage: relPath == null,
+              ),
+            )
+            .toJson(),
+      );
     }
 
     final exportedThemeJson = {
@@ -504,6 +533,7 @@ class BackupService {
           .toJson(),
       'dayTypeStyle': theme.config.dayTypeStyle.toJson(),
       'categoryStyles': exportedCategoryStyles,
+      if (exportedPool.isNotEmpty) 'cardStylePool': exportedPool,
     };
 
     _addJsonFile(archive, 'theme.json', exportedThemeJson);
@@ -608,16 +638,80 @@ class BackupService {
     final rawCatStyles =
         (themeJson['categoryStyles'] as Map?)?.cast<String, dynamic>() ?? {};
     final mappedCatStyles = <String, CategoryStyleConfig>{};
+    final candidatePool = <CardStylePreset>[];
+    final seenPoolKeys = <String>{};
+
+    void addToCandidatePool({
+      required String name,
+      String? defaultCategory,
+      required CategoryStyleConfig style,
+      String? existingId,
+    }) {
+      final dedupeKey =
+          '$name|${style.backgroundImagePath ?? ''}|${style.themeColor.toUpperCase()}';
+      if (seenPoolKeys.contains(dedupeKey)) return;
+      seenPoolKeys.add(dedupeKey);
+      candidatePool.add(
+        CardStylePreset(
+          id: (existingId != null && existingId.isNotEmpty)
+              ? existingId
+              : 'preset_${_uuid.v4().substring(0, 8)}',
+          name: name,
+          defaultCategory: defaultCategory,
+          style: style,
+        ),
+      );
+    }
+
+    // 1. Extract ALL categoryStyles (even unmatched ones go into candidatePool so zero assets are wasted!)
     for (final entry in rawCatStyles.entries) {
-      final cat = localByName[entry.key];
-      if (cat == null) continue;
+      if (entry.value is! Map) continue;
       final styleMap = (entry.value as Map).cast<String, dynamic>();
       final localCatBg =
           await extractAsset(styleMap['backgroundImagePath'] as String?);
-      mappedCatStyles[cat.id] = CategoryStyleConfig.fromJson(styleMap).copyWith(
+      final parsedStyle = CategoryStyleConfig.fromJson(styleMap).copyWith(
         backgroundImagePath: localCatBg,
         clearBackgroundImage: localCatBg == null,
       );
+
+      addToCandidatePool(
+        name: entry.key,
+        defaultCategory: entry.key,
+        style: parsedStyle,
+      );
+
+      final cat = localByName[entry.key];
+      if (cat != null) {
+        mappedCatStyles[cat.id] = parsedStyle;
+      }
+    }
+
+    // 2. Also extract optional cardStylePool entries
+    final rawPool = (themeJson['cardStylePool'] as List?) ?? const [];
+    for (final item in rawPool) {
+      if (item is! Map) continue;
+      final itemMap = item.cast<String, dynamic>();
+      final localBg =
+          await extractAsset(itemMap['backgroundImagePath'] as String?);
+      final preset = CardStylePreset.fromJson(itemMap);
+      final resolvedStyle = preset.style.copyWith(
+        backgroundImagePath: localBg,
+        clearBackgroundImage: localBg == null,
+      );
+
+      addToCandidatePool(
+        name: preset.name,
+        defaultCategory: preset.defaultCategory,
+        style: resolvedStyle,
+        existingId: preset.id,
+      );
+
+      // If this pool item specifies a defaultCategory that exists locally and isn't bound yet, auto-bind!
+      if (preset.defaultCategory != null &&
+          localByName.containsKey(preset.defaultCategory)) {
+        final targetCat = localByName[preset.defaultCategory]!;
+        mappedCatStyles.putIfAbsent(targetCat.id, () => resolvedStyle);
+      }
     }
 
     final themeRecord = AppThemeRecord(
@@ -628,6 +722,7 @@ class BackupService {
         globalStyle: globalStyle,
         dayTypeStyle: dayTypeStyle,
         categoryStyles: mappedCatStyles,
+        cardStylePool: candidatePool,
       ),
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
@@ -670,6 +765,18 @@ class BackupService {
           clearBackgroundImage: catRel == null,
         );
       }
+      final newPool = <CardStylePreset>[];
+      for (final preset in theme.config.cardStylePool) {
+        final poolRel = await packImage(preset.style.backgroundImagePath);
+        newPool.add(
+          preset.copyWith(
+            style: preset.style.copyWith(
+              backgroundImagePath: poolRel,
+              clearBackgroundImage: poolRel == null,
+            ),
+          ),
+        );
+      }
       final portableTheme = theme.copyWith(
         config: theme.config.copyWith(
           globalStyle: theme.config.globalStyle.copyWith(
@@ -677,6 +784,7 @@ class BackupService {
             clearBackgroundImage: globalRel == null,
           ),
           categoryStyles: newCatStyles,
+          cardStylePool: newPool,
         ),
       );
       themesList.add(portableTheme.toMap());
@@ -745,6 +853,18 @@ class BackupService {
           clearBackgroundImage: localCat == null,
         );
       }
+      final newPool = <CardStylePreset>[];
+      for (final preset in theme.config.cardStylePool) {
+        final localPool = await unpackImage(preset.style.backgroundImagePath);
+        newPool.add(
+          preset.copyWith(
+            style: preset.style.copyWith(
+              backgroundImagePath: localPool,
+              clearBackgroundImage: localPool == null,
+            ),
+          ),
+        );
+      }
 
       final restored = theme.copyWith(
         config: theme.config.copyWith(
@@ -753,6 +873,7 @@ class BackupService {
             clearBackgroundImage: localGlobal == null,
           ),
           categoryStyles: newCatStyles,
+          cardStylePool: newPool,
         ),
       );
       restoredThemes.add(restored.toMap());

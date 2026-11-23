@@ -215,6 +215,58 @@ class CategoryStyleConfig {
   }
 }
 
+/// A reusable card style bundle stored in a theme's candidate pool (`cardStylePool`).
+class CardStylePreset {
+  final String id;
+  final String name;
+  final String? defaultCategory;
+  final CategoryStyleConfig style;
+
+  const CardStylePreset({
+    required this.id,
+    required this.name,
+    this.defaultCategory,
+    required this.style,
+  });
+
+  CardStylePreset copyWith({
+    String? id,
+    String? name,
+    String? defaultCategory,
+    CategoryStyleConfig? style,
+  }) {
+    return CardStylePreset(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      defaultCategory: defaultCategory ?? this.defaultCategory,
+      style: style ?? this.style,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (defaultCategory != null && defaultCategory!.isNotEmpty)
+          'defaultCategory': defaultCategory,
+        ...style.toJson(),
+      };
+
+  factory CardStylePreset.fromJson(Map<String, dynamic> json) {
+    final name = (json['name'] as String?)?.trim() ??
+        (json['defaultCategory'] as String?)?.trim() ??
+        '候选样式';
+    final id = (json['id'] as String?)?.trim();
+    return CardStylePreset(
+      id: (id != null && id.isNotEmpty)
+          ? id
+          : 'preset_${name.hashCode.abs()}_${(json['backgroundImagePath'] ?? '').hashCode.abs()}',
+      name: name,
+      defaultCategory: (json['defaultCategory'] as String?)?.trim(),
+      style: CategoryStyleConfig.fromJson(json),
+    );
+  }
+}
+
 class ThemeConfig {
   final GlobalStyleConfig globalStyle;
   final DayTypeStyleConfig dayTypeStyle;
@@ -222,10 +274,14 @@ class ThemeConfig {
   /// Keyed internally by categoryId (fallback lookup by categoryName supported for legacy/seed imports).
   final Map<String, CategoryStyleConfig> categoryStyles;
 
+  /// Theme-scoped candidate pool of reusable card style bundles (imported & user-created).
+  final List<CardStylePreset> cardStylePool;
+
   const ThemeConfig({
     required this.globalStyle,
     required this.dayTypeStyle,
     required this.categoryStyles,
+    this.cardStylePool = const [],
   });
 
   CategoryStyleConfig styleForCategory({
@@ -247,11 +303,13 @@ class ThemeConfig {
     GlobalStyleConfig? globalStyle,
     DayTypeStyleConfig? dayTypeStyle,
     Map<String, CategoryStyleConfig>? categoryStyles,
+    List<CardStylePreset>? cardStylePool,
   }) {
     return ThemeConfig(
       globalStyle: globalStyle ?? this.globalStyle,
       dayTypeStyle: dayTypeStyle ?? this.dayTypeStyle,
       categoryStyles: categoryStyles ?? this.categoryStyles,
+      cardStylePool: cardStylePool ?? this.cardStylePool,
     );
   }
 
@@ -260,6 +318,8 @@ class ThemeConfig {
         'dayTypeStyle': dayTypeStyle.toJson(),
         'categoryStyles':
             categoryStyles.map((k, v) => MapEntry(k, v.toJson())),
+        if (cardStylePool.isNotEmpty)
+          'cardStylePool': cardStylePool.map((e) => e.toJson()).toList(),
       };
 
   String toJsonString() => jsonEncode(toJson());
@@ -275,6 +335,17 @@ class ThemeConfig {
         );
       }
     }
+
+    final rawPool = (json['cardStylePool'] as List?) ?? const [];
+    final parsedPool = <CardStylePreset>[];
+    for (final item in rawPool) {
+      if (item is Map) {
+        parsedPool.add(
+          CardStylePreset.fromJson(item.cast<String, dynamic>()),
+        );
+      }
+    }
+
     return ThemeConfig(
       globalStyle: GlobalStyleConfig.fromJson(
         (json['globalStyle'] as Map?)?.cast<String, dynamic>() ?? {},
@@ -283,6 +354,7 @@ class ThemeConfig {
         (json['dayTypeStyle'] as Map?)?.cast<String, dynamic>() ?? {},
       ),
       categoryStyles: parsedCats,
+      cardStylePool: parsedPool,
     );
   }
 

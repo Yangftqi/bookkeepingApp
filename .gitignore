@@ -26,6 +26,9 @@ build/
 !releases/
 !releases/*.apk
 
+# Local specifications not pushed to remote
+theme_package_specification.md
+
 # Android local keystore & gradle
 android/key.properties
 android/app/*.jks

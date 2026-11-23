@@ -2,6 +2,7 @@ import 'package:bookkeeping_app/data/db/app_database.dart';
 import 'package:bookkeeping_app/data/seed_data.dart';
 import 'package:bookkeeping_app/models/ai_models.dart';
 import 'package:bookkeeping_app/models/expense.dart';
+import 'package:bookkeeping_app/models/theme_config.dart';
 import 'package:bookkeeping_app/models/user_account.dart';
 import 'package:bookkeeping_app/services/llm_service.dart';
 import 'package:bookkeeping_app/services/update_checker_service.dart';
@@ -199,6 +200,34 @@ void main() {
       expect(UpdateCheckerService.isNewerVersion('1.1.0+2', '1.0.9+5'), isTrue);
       expect(UpdateCheckerService.isNewerVersion('1.0.0', '1.0.0'), isFalse);
       expect(UpdateCheckerService.isNewerVersion('0.9.9', '1.0.0'), isFalse);
+    });
+
+    test('serializes ThemeConfig cardStylePool and stays v1 backward compatible', () {
+      final v1Json = SeedData.initialThemes(0).first.config.toJson();
+      expect(v1Json.containsKey('cardStylePool'), isFalse);
+      final parsedV1 = ThemeConfig.fromJson(v1Json);
+      expect(parsedV1.cardStylePool, isEmpty);
+
+      final withPool = parsedV1.copyWith(
+        cardStylePool: const [
+          CardStylePreset(
+            id: 'p1',
+            name: '樱花甜品',
+            defaultCategory: '吃的',
+            style: CategoryStyleConfig(
+              themeColor: '#FFF43F5E',
+              backgroundImagePath: 'assets/cat_food.jpg',
+              cardOverlayOpacity: 0.45,
+              cardBlurSigma: 2.0,
+            ),
+          ),
+        ],
+      );
+      final roundTrip = ThemeConfig.fromJsonString(withPool.toJsonString());
+      expect(roundTrip.cardStylePool.length, 1);
+      expect(roundTrip.cardStylePool.first.name, '樱花甜品');
+      expect(roundTrip.cardStylePool.first.defaultCategory, '吃的');
+      expect(roundTrip.cardStylePool.first.style.themeColor, '#FFF43F5E');
     });
   });
 }

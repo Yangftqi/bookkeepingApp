@@ -207,19 +207,24 @@ class _BackupCenterScreenState extends ConsumerState<BackupCenterScreen> {
         final choice = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('主题包包含本地缺失类别'),
+            title: const Text('发现本地缺失类别'),
             content: Text(
-              '以下类别在本地不存在：${inspection.missingCategoryNames.join("、")}\n'
-              '是否一键创建这些类别并完整绑定主题样式与卡片背景图？',
+              '主题包「${inspection.themeName}」包含以下本地尚未创建的类别：\n'
+              '${inspection.missingCategoryNames.join("、")}\n\n'
+              '无论是否创建类别，所有卡片样式都会完整收录进本主题的「候选库」，随时可在主题编辑器一键绑定。',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('跳过缺失类别'),
+                onPressed: () => Navigator.of(ctx).pop(null),
+                child: const Text('取消'),
+              ),
+              OutlinedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('同时创建缺失类别'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('一键创建并绑定'),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('仅收录到候选库（推荐）'),
               ),
             ],
           ),
@@ -235,8 +240,13 @@ class _BackupCenterScreenState extends ConsumerState<BackupCenterScreen> {
       );
       await ref.read(appControllerProvider.notifier).reloadAll();
       if (mounted) {
+        final poolCount = imported.config.cardStylePool.length;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('主题「${imported.name}」导入成功')),
+          SnackBar(
+            content: Text(
+              '主题「${imported.name}」导入成功（共收录 $poolCount 套卡片样式至候选库）',
+            ),
+          ),
         );
       }
     } catch (e) {

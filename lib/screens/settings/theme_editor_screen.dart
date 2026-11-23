@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../models/category.dart';
 import '../../models/expense.dart';
@@ -30,6 +32,7 @@ class ThemeEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
+  static const _uuid = Uuid();
   late TextEditingController _nameCtrl;
   late ThemeConfig _config;
   bool _keepLossless = false; // Default OFF: Smart HD compression
@@ -146,12 +149,116 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
       categoryName: cat.name,
       defaultColorHex: cat.defaultColorHex,
     );
+    final updatedStyle = currentStyle.copyWith(backgroundImagePath: savedPath);
     final updatedMap =
         Map<String, CategoryStyleConfig>.from(_config.categoryStyles)
-          ..[cat.id] = currentStyle.copyWith(backgroundImagePath: savedPath);
+          ..[cat.id] = updatedStyle;
+    final updatedPool = List<CardStylePreset>.from(_config.cardStylePool)
+      ..add(
+        CardStylePreset(
+          id: 'preset_${_uuid.v4().substring(0, 8)}',
+          name: cat.name,
+          defaultCategory: cat.name,
+          style: updatedStyle,
+        ),
+      );
+    setState(() {
+      _config = _config.copyWith(
+        categoryStyles: updatedMap,
+        cardStylePool: updatedPool,
+      );
+    });
+  }
+
+  Future<void> _applyPresetToCategoryDialog(ExpenseCategory cat) async {
+    final pool = _config.cardStylePool;
+    if (pool.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前主题候选库为空，可先裁剪卡片图或导入主题包')),
+      );
+      return;
+    }
+
+    final chosen = await showDialog<CardStylePreset>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('为「${cat.name}」套用候选样式'),
+        content: SizedBox(
+          width: 420,
+          height: 360,
+          child: ListView.separated(
+            itemCount: pool.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final preset = pool[i];
+              return _CandidatePresetPreviewTile(
+                preset: preset,
+                isDarkText: _config.globalStyle.isDarkText,
+                surfaceColor: _config.globalStyle.surface,
+                onTap: () => Navigator.of(ctx).pop(preset),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null) return;
+
+    final updatedMap =
+        Map<String, CategoryStyleConfig>.from(_config.categoryStyles)
+          ..[cat.id] = chosen.style;
     setState(() {
       _config = _config.copyWith(categoryStyles: updatedMap);
+      _previewCatId = cat.id;
     });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已将「${chosen.name}」套用到「${cat.name}」')),
+      );
+    }
+  }
+
+  Future<void> _bindPresetToAnyCategoryDialog(
+    CardStylePreset preset,
+    List<ExpenseCategory> categories,
+  ) async {
+    final targetCat = await showDialog<ExpenseCategory>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text('将「${preset.name}」一键绑定到类别'),
+        children: categories
+            .map(
+              (c) => SimpleDialogOption(
+                onPressed: () => Navigator.of(ctx).pop(c),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(c.name, style: const TextStyle(fontSize: 15)),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (targetCat == null) return;
+
+    final updatedMap =
+        Map<String, CategoryStyleConfig>.from(_config.categoryStyles)
+          ..[targetCat.id] = preset.style;
+    setState(() {
+      _config = _config.copyWith(categoryStyles: updatedMap);
+      _previewCatId = targetCat.id;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已将「${preset.name}」绑定到「${targetCat.name}」')),
+      );
+    }
   }
 
   Future<String?> _showColorPickerDialog(String title, String initialHex) async {
@@ -596,7 +703,10 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                         style: const TextStyle(fontSize: 11.5),
                       ),
                       children: [
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             OutlinedButton.icon(
                               onPressed: () async {
@@ -617,7 +727,6 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                               ),
                               label: const Text('主题色'),
                             ),
-                            const SizedBox(width: 8),
                             FilledButton.tonalIcon(
                               onPressed: () =>
                                   _pickAndCropCategoryBackground(cat),
@@ -628,6 +737,16 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                                     : '裁剪卡片图',
                               ),
                             ),
+                            if (_config.cardStylePool.isNotEmpty)
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    _applyPresetToCategoryDialog(cat),
+                                icon: const Icon(
+                                  Icons.collections_bookmark_outlined,
+                                  size: 16,
+                                ),
+                                label: const Text('从候选库套用'),
+                              ),
                             if (style.backgroundImagePath != null)
                               IconButton(
                                 tooltip: '移除卡片背景图',
@@ -667,6 +786,81 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
                   }),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 4. Collapsible Theme Candidate Card Style Pool
+          Card(
+            child: ExpansionTile(
+              title: Text(
+                '4. 主题候选库 (${_config.cardStylePool.length} 套)',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: const Text(
+                '已收录的卡片样式套装，可随时一键绑定到任意本地类别',
+                style: TextStyle(fontSize: 12),
+              ),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              children: _config.cardStylePool.isEmpty
+                  ? [
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          '暂无候选样式。导入主题包或从相册裁剪卡片图后会自动收录于此。',
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ]
+                  : _config.cardStylePool.map((preset) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _CandidatePresetPreviewTile(
+                          preset: preset,
+                          isDarkText: _config.globalStyle.isDarkText,
+                          surfaceColor: _config.globalStyle.surface,
+                          onTap: () =>
+                              _bindPresetToAnyCategoryDialog(preset, categories),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton.tonal(
+                                style: FilledButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                ),
+                                onPressed: () => _bindPresetToAnyCategoryDialog(
+                                  preset,
+                                  categories,
+                                ),
+                                child: const Text(
+                                  '绑定',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: '从候选库移除',
+                                icon: const Icon(Icons.delete_outline, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _config = _config.copyWith(
+                                      cardStylePool: _config.cardStylePool
+                                          .where((p) => p.id != preset.id)
+                                          .toList(),
+                                    );
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
             ),
           ),
           const SizedBox(height: 24),
@@ -769,6 +963,124 @@ class _ThemeEditorScreenState extends ConsumerState<ThemeEditorScreen> {
           onChanged: (v) => onChanged(style.copyWith(borderWidth: v)),
         ),
       ],
+    );
+  }
+}
+
+class _CandidatePresetPreviewTile extends StatelessWidget {
+  final CardStylePreset preset;
+  final bool isDarkText;
+  final Color surfaceColor;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  const _CandidatePresetPreviewTile({
+    required this.preset,
+    required this.isDarkText,
+    required this.surfaceColor,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = preset.style;
+    final bgPath = style.backgroundImagePath;
+    final hasBg =
+        bgPath != null && bgPath.isNotEmpty && File(bgPath).existsSync();
+    final overlayColor = (isDarkText ? Colors.white : Colors.black)
+        .withOpacity(style.cardOverlayOpacity.clamp(0.0, 0.92));
+    final textColor =
+        isDarkText ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: 68,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: style.color.withOpacity(0.55),
+                width: 1.2,
+              ),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (hasBg)
+                  Image(
+                    image: ResizeImage.resizeIfNeeded(
+                      640,
+                      null,
+                      FileImage(File(bgPath)),
+                    ),
+                    fit: BoxFit.cover,
+                  )
+                else
+                  ColoredBox(color: surfaceColor),
+                if (hasBg && style.cardBlurSigma > 0.1)
+                  BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: style.cardBlurSigma,
+                      sigmaY: style.cardBlurSigma,
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                if (hasBg) ColoredBox(color: overlayColor),
+                Row(
+                  children: [
+                    Container(width: 6, color: style.color),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            preset.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                          Text(
+                            '${preset.defaultCategory != null ? "默认：${preset.defaultCategory} · " : ""}${hasBg ? "含背景图" : "纯色"}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: textColor.withOpacity(0.75),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (trailing != null) ...[
+                      trailing!,
+                      const SizedBox(width: 6),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: Icon(
+                          Icons.touch_app_rounded,
+                          size: 18,
+                          color: style.color,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
